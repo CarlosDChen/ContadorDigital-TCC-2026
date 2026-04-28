@@ -70,3 +70,56 @@
       color: #666;
       line-height: 1.5;
     }
+
+    .table-wrapper {
+      padding: 32px 40px;
+    }
+
+    .datagrid {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .datagrid thead tr {
+      background: #f9fafb;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .datagrid th {
+      padding: 14px 20px;
+      text-align: left;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #555;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .datagrid td {
+      padding: 14px 20px;
+      font-size: 0.95rem;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .datagrid tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .datagrid tbody tr:hover {
+      background: #f9fafb;
+    }
+
+    .valor-positivo {
+      color: #22c55e;
+      font-weight: 600;
+    }
+
+    .valor-negativo {
+      color: #ef4444;
+      font-weight: 600;
+    }
