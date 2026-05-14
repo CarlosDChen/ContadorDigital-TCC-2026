@@ -26,6 +26,29 @@ const listarUsuarios = (req, res) => {
   res.json(usuarios)
 }
 
+const criarUsuario = (req, res) => {
+  const dadosUsuario = req.body
+  console.log(dadosUsuario)
+  
+  if (!dadosUsuario.email) {
+    return res.json({
+      erro: 'Email obrigatorio'
+    })
+  }
+
+  if (!dadosUsuario.senhaUso) {
+    return res.json({
+      erro: 'Senha obrigatoria'
+    })
+  }
+
+  res.json({
+    mensagem: 'Usuario criado com sucesso',
+    usuario: dadosUsuario
+  })
+}
+
 module.exports = {
-  listarUsuarios
+  listarUsuarios,
+  criarUsuario
 }
