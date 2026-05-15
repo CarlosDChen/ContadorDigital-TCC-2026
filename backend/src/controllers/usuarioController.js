@@ -30,15 +30,27 @@ const criarUsuario = (req, res) => {
   const dadosUsuario = req.body
   console.log(dadosUsuario)
   
-  if (!dadosUsuario.email) {
+  if (!dadosUsuario.email || !dadosUsuario.email.includes('@') ) {
     return res.json({
-      erro: 'Email obrigatorio'
+      erro: 'Email invalido'
     })
   }
 
-  if (!dadosUsuario.senhaUso) {
+  if (!dadosUsuario.senhaUso || dadosUsuario.senhaUso.length < 8 ){
     return res.json({
-      erro: 'Senha obrigatoria'
+      erro: 'A senha deve ter pelo menos 8 caracteres'
+    })
+  }
+
+  if (!dadosUsuario.cpfUso ||  dadosUsuario.cpfUso.length != 11 || !/^\d+$/.test(dadosUsuario.cpfUso)){
+    return res.json({
+      erro: 'O CPF deve ter exatamente 11 digitos sem separadores'
+    })
+  }
+
+  if (!dadosUsuario.telefone ||  dadosUsuario.telefone.length > 11 || !/^\d+$/.test(dadosUsuario.telefone)){
+    return res.json({
+      erro: 'O telefone deve possuir no maximo 11 digitos e sem separadores'
     })
   }
 
