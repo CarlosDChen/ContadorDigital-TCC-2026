@@ -1,7 +1,6 @@
 const Usuario = require('../models/usuarioModel')
 
-const listarUsuarios = (req, res) => {
-  const usuario1 = new Usuario(
+const usuario1 = new Usuario(
     1,
     '12345678900',
     'joao@email.com',
@@ -23,7 +22,8 @@ const listarUsuarios = (req, res) => {
 
   const usuarios = [usuario1, usuario2]
 
-  res.json(usuarios)
+const listarUsuarios = (req, res) => {
+  res.status(200).json(usuarios)
 }
 
 const criarUsuario = (req, res) => {
@@ -60,7 +60,67 @@ const criarUsuario = (req, res) => {
   })
 }
 
+const buscarUsuarioPorId = (req, res) => {
+  const id = Number(req.params.id)
+
+  const usuarioEncontrado = usuarios.find(
+    usuario => usuario.idUsuario === id
+  )
+
+  if (!usuarioEncontrado) {
+    return res.status(404).json({
+      erro: 'Usuario nao encontrado'
+    })
+  }
+
+  res.status(200).json(usuarioEncontrado)
+}
+
+const atualizarUsuario = (req, res) => {
+  const id = Number(req.params.id)
+
+  const usuarioEncontrado = usuarios.find(
+    usuario => usuario.idUsuario === id
+  )
+
+  if (!usuarioEncontrado) {
+    return res.status(404).json({
+      erro: 'Usuario nao encontrado'
+    })
+  }
+
+  usuarioEncontrado.nomeUso = req.body.nomeUso
+
+  res.status(200).json({
+    mensagem: 'Usuario atualizado com sucesso',
+    usuario: usuarioEncontrado
+  })
+}
+
+const deletarUsuario = (req, res) => {
+  const id = Number(req.params.id)
+
+  const indiceUsuario = usuarios.findIndex(
+    usuario => usuario.idUsuario === id
+  )
+
+  if (indiceUsuario === -1) {
+    return res.status(404).json({
+      erro: 'Usuario nao encontrado'
+    })
+  }
+
+  usuarios.splice(indiceUsuario, 1)
+
+  res.status(200).json({
+    mensagem: 'Usuario deletado com sucesso'
+  })
+}
+
 module.exports = {
   listarUsuarios,
-  criarUsuario
+  criarUsuario,
+  buscarUsuarioPorId,
+  atualizarUsuario,
+  deletarUsuario
 }
