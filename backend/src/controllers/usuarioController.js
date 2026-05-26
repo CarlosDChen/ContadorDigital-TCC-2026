@@ -54,9 +54,21 @@ const criarUsuario = (req, res) => {
     })
   }
 
+  const novoUsuario = new Usuario(
+    usuarios.length + 1,
+    dadosUsuario.cpfUso,
+    dadosUsuario.email,
+    dadosUsuario.telefone,
+    dadosUsuario.nomeUso,
+    dadosUsuario.nomeFanUso,
+    dadosUsuario.senhaUso
+  )
+
+  usuarios.push(novoUsuario)
+
   res.status(201).json({
     mensagem: 'Usuario criado com sucesso',
-    usuario: dadosUsuario
+    usuario: novoUsuario
   })
 }
 

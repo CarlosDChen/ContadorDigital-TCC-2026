@@ -16,10 +16,10 @@ router.get('/usuarios', listarUsuarios)
 
 router.post('/usuarios', criarUsuario)
 
-router.get('/usuarios/:id', buscarUsuarioPorId)
+router.get('/usuarios/id/:id', buscarUsuarioPorId)
 
-router.put('/usuarios/:id', atualizarUsuario)
+router.put('/usuarios/id/:id', atualizarUsuario)
 
-router.delete('/usuarios/:id', deletarUsuario)
+router.delete('/usuarios/id/:id', deletarUsuario)
 
 module.exports = router
