@@ -45,6 +45,190 @@
       background: #e5e7eb;
     }
 
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .btn-login {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      background: #22c55e;
+      color: #ffffff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-login:hover {
+      background: #16a34a;
+    }
+
+    .btn-cadastro {
+      padding: 8px 20px;
+      border: 1px solid #22c55e;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #22c55e;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-cadastro:hover {
+      background: #f0fdf4;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-box {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 24px;
+      width: 320px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .modal-header h2 {
+      font-size: 1.2rem;
+      color: #333;
+    }
+
+    .modal-close {
+      border: none;
+      background: none;
+      font-size: 1.4rem;
+      line-height: 1;
+      color: #888;
+      cursor: pointer;
+    }
+
+    .modal-close:hover {
+      color: #333;
+    }
+
+    #form_login {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #form_login label {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    #form_login input {
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .btn-login-submit {
+      width: 100%;
+      margin-top: 16px;
+    }
+
+    .container.container-cadastro {
+      width: 560px;
+    }
+
+    .container-cadastro h2 {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    #form_cadastro {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+    }
+
+    .campo {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .campo-largo {
+      grid-column: 1 / -1;
+    }
+
+    #form_cadastro label {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    #form_cadastro input {
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    #form_cadastro input.input-grande {
+      padding: 12px 14px;
+      font-size: 1.05rem;
+    }
+
+    .campo-senha {
+      position: relative;
+      display: flex;
+    }
+
+    .campo-senha input {
+      width: 100%;
+      padding-right: 40px;
+    }
+
+    .btn-toggle-senha {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      color: #888;
+      padding: 4px;
+    }
+
+    .btn-toggle-senha:hover {
+      color: #333;
+    }
+
+    .msg-erro {
+      color: #ef4444;
+      font-size: 0.85rem;
+      margin-top: 8px;
+      min-height: 1em;
+    }
+
     .main {
       padding: 40px;
       display: flex;

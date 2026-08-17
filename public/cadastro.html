@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro</title>
+  </head>
+<body>
+    <link rel="stylesheet" href="css/style.css">
+
+  <header>
+    <h1 id="lbl_contadorDigital" style="cursor: pointer;">Contador Digital</h1>
+  </header>
+
+  <div class="main">
+    <div class="container container-cadastro">
+      <h2>Cadastre-se</h2>
+      <form id="form_cadastro">
+        <div class="campo">
+          <label for="input_nome">Nome</label>
+          <input type="text" id="input_nome" placeholder="Seu nome completo" required>
+        </div>
+
+        <div class="campo">
+          <label for="input_usuario">Usuário</label>
+          <input type="text" id="input_usuario" placeholder="Seu nome de usuário" required>
+        </div>
+
+        <div class="campo">
+          <label for="input_cpf">CPF</label>
+          <input type="text" id="input_cpf" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" required>
+        </div>
+
+        <div class="campo campo-largo">
+          <label for="input_email">E-mail</label>
+          <input type="email" id="input_email" class="input-grande" placeholder="seu@email.com" required>
+        </div>
+
+        <div class="campo campo-largo">
+          <label for="input_confirmarEmail">Confirmação de e-mail</label>
+          <input type="email" id="input_confirmarEmail" class="input-grande" placeholder="seu@email.com" required>
+        </div>
+
+        <div class="campo">
+          <label for="input_senha">Senha (9 caracteres)</label>
+          <div class="campo-senha">
+            <input type="password" id="input_senha" placeholder="•••••••••" maxlength="9" required>
+            <button type="button" class="btn-toggle-senha" data-alvo="input_senha" aria-label="Mostrar senha">👁</button>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="input_confirmarSenha">Confirmação de senha (9 caracteres)</label>
+          <div class="campo-senha">
+            <input type="password" id="input_confirmarSenha" placeholder="•••••••••" maxlength="9" required>
+            <button type="button" class="btn-toggle-senha" data-alvo="input_confirmarSenha" aria-label="Mostrar senha">👁</button>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label for="input_numero">Número (opcional)</label>
+          <input type="tel" id="input_numero" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15">
+        </div>
+
+        <div class="campo">
+          <label for="input_confirmarNumero">Confirmação de número (opcional)</label>
+          <input type="tel" id="input_confirmarNumero" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15">
+        </div>
+
+        <p id="msg_erroCadastro" class="msg-erro campo-largo"></p>
+
+        <button type="submit" class="btn-login btn-login-submit campo-largo">Cadastrar</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="json/main.js"></script>
+</body>
+</html>

@@ -1,8 +1,12 @@
 //imports
+require('dotenv').config()
+
 const express = require('express')
 const cors = require('cors')
 
 const usuarioRoutes = require('./src/routes/usuarioRoutes')
+const categoriaRoutes = require('./src/routes/categoriaRoutes')
+const valorRoutes = require('./src/routes/valorRoutes')
 
 const app = express()
 
@@ -13,6 +17,8 @@ app.use(cors())
 app.use(express.json())
 
 app.use(usuarioRoutes)
+app.use(categoriaRoutes)
+app.use(valorRoutes)
 
 app.get('/', (req, res) => {
   res.send('Backend funcionando e atualizado')
