@@ -63,8 +63,8 @@ const lblContador = document.getElementById("lbl_contadorDigital");
 if (lblContador) {
     lblContador.addEventListener("click", () => {
         if (window.location.pathname.endsWith("cadastro.html")) {
-            window.location.href = "menu.html";
-        } else if (!window.location.pathname.endsWith("menu.html")) {
+            window.location.href = "landingPage.html";
+        } else if (!window.location.pathname.endsWith("landingPage.html")) {
             window.location.href = "index.html";
         }
     });
@@ -161,7 +161,7 @@ if (formCadastro) {
             return;
         }
 
-        window.location.href = "menu.html";
+        window.location.href = "landingPage.html";
     });
 }
 
