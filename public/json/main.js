@@ -31,6 +31,7 @@ const overlayLogin = document.getElementById("overlay_login");
 if (btnLogin && overlayLogin) {
     const btnFecharLogin = document.getElementById("btn_fecharLogin");
     const formLogin = document.getElementById("form_login");
+    const msgErroLogin = document.getElementById("msg_erroLogin");
 
     btnLogin.addEventListener("click", () => {
         overlayLogin.classList.add("active");
@@ -46,9 +47,36 @@ if (btnLogin && overlayLogin) {
         }
     });
 
-    formLogin.addEventListener("submit", (event) => {
+    formLogin.addEventListener("submit", async (event) => {
         event.preventDefault();
-        overlayLogin.classList.remove("active");
+        msgErroLogin.textContent = "";
+
+        const email = document.getElementById("input_email").value.trim();
+        const senha = document.getElementById("input_senha").value;
+
+        try {
+            const resposta = await fetch("http://localhost:3000/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, senhaUso: senha })
+            });
+
+            const dados = await resposta.json();
+
+            if (!resposta.ok) {
+                msgErroLogin.textContent = dados.erro || "Não foi possível fazer login.";
+                return;
+            }
+
+            localStorage.setItem("usuarioLogado", JSON.stringify({
+                idUsuario: dados.usuario.idUsuario,
+                nomeUso: dados.usuario.nomeUso
+            }));
+
+            window.location.href = "index.html";
+        } catch (erro) {
+            msgErroLogin.textContent = "Não foi possível conectar ao servidor.";
+        }
     });
 }
 
@@ -120,14 +148,24 @@ if (inputConfirmarNumero) {
     });
 }
 
+const overlaySucessoCadastro = document.getElementById("overlay_sucessoCadastro");
+const btnOkSucessoCadastro = document.getElementById("btn_okSucessoCadastro");
+if (overlaySucessoCadastro && btnOkSucessoCadastro) {
+    btnOkSucessoCadastro.addEventListener("click", () => {
+        window.location.href = "landingPage.html";
+    });
+}
+
 const formCadastro = document.getElementById("form_cadastro");
 if (formCadastro) {
     const msgErroCadastro = document.getElementById("msg_erroCadastro");
 
-    formCadastro.addEventListener("submit", (event) => {
+    formCadastro.addEventListener("submit", async (event) => {
         event.preventDefault();
         msgErroCadastro.textContent = "";
 
+        const nome = document.getElementById("input_nome").value.trim();
+        const usuario = document.getElementById("input_usuario").value.trim();
         const cpf = document.getElementById("input_cpf").value.trim();
         const email = document.getElementById("input_email").value.trim();
         const confirmarEmail = document.getElementById("input_confirmarEmail").value.trim();
@@ -156,12 +194,41 @@ if (formCadastro) {
             return;
         }
 
+        if (!/^\(\d{2}\) \d{5}-\d{4}$/.test(numero)) {
+            msgErroCadastro.textContent = "O número deve estar completo, no formato (00) 00000-0000.";
+            return;
+        }
+
         if (numero !== confirmarNumero) {
             msgErroCadastro.textContent = "Os números informados não coincidem.";
             return;
         }
 
-        window.location.href = "landingPage.html";
+        try {
+            const resposta = await fetch("http://localhost:3000/usuarios", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    nomeUso: nome,
+                    nomeFanUso: usuario,
+                    cpfUso: cpf.replace(/\D/g, ""),
+                    email: email,
+                    telefone: numero.replace(/\D/g, ""),
+                    senhaUso: senha
+                })
+            });
+
+            const dados = await resposta.json();
+
+            if (!resposta.ok) {
+                msgErroCadastro.textContent = dados.erro || "Não foi possível concluir o cadastro.";
+                return;
+            }
+
+            overlaySucessoCadastro.classList.add("active");
+        } catch (erro) {
+            msgErroCadastro.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
+        }
     });
 }
 
@@ -171,7 +238,11 @@ if (rendaEl) {
     const gastos = 750.00;
     const saldo = renda - gastos;
 
+    const saldoEl = document.getElementById("saldo");
+
     rendaEl.textContent = "R$ " + renda.toFixed(2);
     document.getElementById("gastos").textContent = "R$ " + gastos.toFixed(2);
-    document.getElementById("saldo").textContent = "R$ " + saldo.toFixed(2);
+    saldoEl.textContent = "R$ " + saldo.toFixed(2);
+
+    saldoEl.classList.add(saldo > 0 ? "saldo-positivo" : "saldo-negativo");
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Menu</title>
+  <title>Contador Digital</title>
   </head>
 <body>
     <link rel="stylesheet" href="css/style.css">
@@ -27,7 +27,12 @@
         <input type="email" id="input_email" placeholder="seu@email.com" required>
 
         <label for="input_senha">Senha</label>
-        <input type="password" id="input_senha" placeholder="••••••••" required>
+        <div class="campo-senha">
+          <input type="password" id="input_senha" placeholder="••••••••" required>
+          <button type="button" class="btn-toggle-senha" data-alvo="input_senha" aria-label="Mostrar senha">👁</button>
+        </div>
+
+        <p id="msg_erroLogin" class="msg-erro"></p>
 
         <button type="submit" class="btn-login btn-login-submit">Entrar</button>
       </form>
