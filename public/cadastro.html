@@ -58,19 +58,29 @@
         </div>
 
         <div class="campo">
-          <label for="input_numero">Número (opcional)</label>
-          <input type="tel" id="input_numero" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15">
+          <label for="input_numero">Número</label>
+          <input type="tel" id="input_numero" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15" required>
         </div>
 
         <div class="campo">
-          <label for="input_confirmarNumero">Confirmação de número (opcional)</label>
-          <input type="tel" id="input_confirmarNumero" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15">
+          <label for="input_confirmarNumero">Confirmação de número</label>
+          <input type="tel" id="input_confirmarNumero" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15" required>
         </div>
 
         <p id="msg_erroCadastro" class="msg-erro campo-largo"></p>
 
         <button type="submit" class="btn-login btn-login-submit campo-largo">Cadastrar</button>
       </form>
+    </div>
+  </div>
+
+  <div id="overlay_sucessoCadastro" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Cadastro realizado</h2>
+      </div>
+      <p>Sua conta foi criada com sucesso.</p>
+      <button id="btn_okSucessoCadastro" class="btn-login btn-login-submit">OK</button>
     </div>
   </div>
 

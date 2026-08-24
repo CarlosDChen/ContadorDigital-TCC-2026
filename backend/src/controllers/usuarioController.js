@@ -139,6 +139,37 @@ const atualizarUsuario = async (req, res) => {
   })
 }
 
+const loginUsuario = async (req, res) => {
+  const { email, senhaUso } = req.body
+
+  if (!email || !senhaUso) {
+    return res.status(400).json({
+      erro: 'Email e senha sao obrigatorios'
+    })
+  }
+
+  const resultado = await pool.query('select * from usuario where email = $1', [email])
+
+  if (resultado.rows.length === 0) {
+    return res.status(401).json({
+      erro: 'Email ou senha invalidos'
+    })
+  }
+
+  const usuarioEncontrado = linhaParaUsuario(resultado.rows[0])
+
+  if (usuarioEncontrado.senhaUso !== senhaUso) {
+    return res.status(401).json({
+      erro: 'Email ou senha invalidos'
+    })
+  }
+
+  res.status(200).json({
+    mensagem: 'Login realizado com sucesso',
+    usuario: usuarioParaResposta(usuarioEncontrado)
+  })
+}
+
 const deletarUsuario = async (req, res) => {
   const id = Number(req.params.id)
 
@@ -160,5 +191,6 @@ module.exports = {
   criarUsuario,
   buscarUsuarioPorId,
   atualizarUsuario,
-  deletarUsuario
+  deletarUsuario,
+  loginUsuario
 }

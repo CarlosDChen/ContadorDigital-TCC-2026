@@ -307,3 +307,13 @@
       color: #ef4444;
       font-weight: 600;
     }
+
+    .saldo-positivo {
+      color: #3b82f6;
+      font-weight: 600;
+    }
+
+    .saldo-negativo {
+      color: #ef4444;
+      font-weight: 600;
+    }
