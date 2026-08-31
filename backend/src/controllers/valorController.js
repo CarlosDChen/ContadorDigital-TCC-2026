@@ -19,6 +19,17 @@ const listarValores = async (req, res) => {
   res.status(200).json(resultado.rows.map(linhaParaValor))
 }
 
+const listarValoresPorUsuario = async (req, res) => {
+  const idUsuario = Number(req.params.idUsuario)
+
+  const resultado = await pool.query(
+    'select * from valores where idusuario = $1 order by dataentra desc, idvalor desc',
+    [idUsuario]
+  )
+
+  res.status(200).json(resultado.rows.map(linhaParaValor))
+}
+
 const criarValor = async (req, res) => {
   const dadosValor = req.body
 
@@ -38,6 +49,25 @@ const criarValor = async (req, res) => {
     return res.status(400).json({
       erro: 'O valor e obrigatorio'
     })
+  }
+
+  if (dadosValor.idCategoria) {
+    const resultadoCategoria = await pool.query(
+      'select tipocatego from categoria where idcatego = $1',
+      [dadosValor.idCategoria]
+    )
+
+    if (resultadoCategoria.rows.length === 0) {
+      return res.status(400).json({
+        erro: 'Categoria informada nao existe'
+      })
+    }
+
+    if (resultadoCategoria.rows[0].tipocatego !== dadosValor.receitaDespesa) {
+      return res.status(400).json({
+        erro: 'A categoria selecionada nao corresponde ao tipo do lançamento (receita/despesa)'
+      })
+    }
   }
 
   try {
@@ -128,6 +158,7 @@ const deletarValor = async (req, res) => {
 
 module.exports = {
   listarValores,
+  listarValoresPorUsuario,
   criarValor,
   buscarValorPorId,
   atualizarValor,

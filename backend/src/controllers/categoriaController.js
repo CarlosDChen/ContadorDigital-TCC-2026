@@ -16,6 +16,17 @@ const listarCategorias = async (req, res) => {
   res.status(200).json(resultado.rows.map(linhaParaCategoria))
 }
 
+const listarCategoriasPorUsuario = async (req, res) => {
+  const idUsuario = Number(req.params.idUsuario)
+
+  const resultado = await pool.query(
+    'select * from categoria where idusuario = $1 order by idcatego',
+    [idUsuario]
+  )
+
+  res.status(200).json(resultado.rows.map(linhaParaCategoria))
+}
+
 const criarCategoria = async (req, res) => {
   const dadosCategoria = req.body
 
@@ -116,6 +127,7 @@ const deletarCategoria = async (req, res) => {
 
 module.exports = {
   listarCategorias,
+  listarCategoriasPorUsuario,
   criarCategoria,
   buscarCategoriaPorId,
   atualizarCategoria,

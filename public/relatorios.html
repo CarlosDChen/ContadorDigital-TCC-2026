@@ -18,7 +18,33 @@
     </nav>
   </header>
 
+  <div class="filtros-relatorios">
+    <label for="select_mesAnoRelatorio">Mês</label>
+    <select id="select_mesAnoRelatorio"></select>
+  </div>
 
+  <div class="relatorios-grid">
+    <div class="card-grafico">
+      <h2>Gastos por Categoria</h2>
+      <div class="grafico-corpo">
+        <svg id="grafico_pizza_gastos" viewBox="0 0 200 200" role="img" aria-label="Gastos por categoria no mês selecionado"></svg>
+        <ul id="legenda_pizza_gastos" class="legenda-grafico"></ul>
+      </div>
+      <table id="tabela_pizza_gastos" class="tabela-dados-grafico">
+        <caption class="sr-only">Gastos por categoria no mês selecionado</caption>
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th>Valor</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tooltip_grafico" class="tooltip-grafico"></div>
 
   <script src="json/main.js"></script>
 </body>

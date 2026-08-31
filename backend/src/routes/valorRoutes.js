@@ -3,6 +3,7 @@ const router = express.Router()
 
 const {
     listarValores,
+    listarValoresPorUsuario,
     criarValor,
     buscarValorPorId,
     atualizarValor,
@@ -10,6 +11,8 @@ const {
 } = require('../controllers/valorController')
 
 router.get('/valores', listarValores)
+
+router.get('/valores/usuario/:idUsuario', listarValoresPorUsuario)
 
 router.post('/valores', criarValor)
 

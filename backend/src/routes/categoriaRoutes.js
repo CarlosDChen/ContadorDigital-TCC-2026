@@ -3,6 +3,7 @@ const router = express.Router()
 
 const {
     listarCategorias,
+    listarCategoriasPorUsuario,
     criarCategoria,
     buscarCategoriaPorId,
     atualizarCategoria,
@@ -10,6 +11,8 @@ const {
 } = require('../controllers/categoriaController')
 
 router.get('/categorias', listarCategorias)
+
+router.get('/categorias/usuario/:idUsuario', listarCategoriasPorUsuario)
 
 router.post('/categorias', criarCategoria) 
 
