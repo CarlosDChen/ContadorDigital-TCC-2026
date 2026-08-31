@@ -21,6 +21,12 @@
 
 
   <div class="table-wrapper">
+    <div class="acoes-lancamentos">
+      <button id="btn_adicionarGasto" class="btn-acao-gasto">+ Adicionar Gasto</button>
+      <button id="btn_adicionarRenda" class="btn-acao-renda">+ Adicionar Renda</button>
+      <button id="btn_adicionarCategoria" class="btn-acao-categoria">+ Adicionar Categoria</button>
+    </div>
+
     <table class="datagrid">
       <thead>
         <tr>
@@ -30,33 +36,59 @@
           <th>Valor</th>
         </tr>
       </thead>
-      <tbody id="tabela_lancamentos">
-        <tr>
-          <td>28/04/2026</td>
-          <td>Salário</td>
-          <td>Renda</td>
-          <td class="valor-positivo">R$ 1.000,00</td>
-        </tr>
-        <tr>
-          <td>28/04/2026</td>
-          <td>Mercado</td>
-          <td>Alimentação</td>
-          <td class="valor-negativo">R$ 250,00</td>
-        </tr>
-        <tr>
-          <td>27/04/2026</td>
-          <td>Conta de luz</td>
-          <td>Moradia</td>
-          <td class="valor-negativo">R$ 180,00</td>
-        </tr>
-        <tr>
-          <td>26/04/2026</td>
-          <td>Transporte</td>
-          <td>Transporte</td>
-          <td class="valor-negativo">R$ 120,00</td>
-        </tr>
-      </tbody>
+      <tbody id="tabela_lancamentos"></tbody>
     </table>
+  </div>
+
+  <div id="overlay_lancamento" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="tituloModalLancamento">Adicionar Gasto</h2>
+        <button id="btn_fecharLancamento" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form_lancamento">
+        <label for="input_descricaoLancamento">Descrição</label>
+        <input type="text" id="input_descricaoLancamento" placeholder="Ex: Mercado" required>
+
+        <label for="input_valorLancamento">Valor</label>
+        <input type="number" id="input_valorLancamento" step="0.01" min="0.01" placeholder="0,00" required>
+
+        <label for="input_categoriaLancamento">Categoria</label>
+        <select id="input_categoriaLancamento">
+          <option value="">Sem categoria</option>
+        </select>
+
+        <label for="input_dataLancamento">Data</label>
+        <input type="text" id="input_dataLancamento" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" required>
+
+        <p id="msg_erroLancamento" class="msg-erro"></p>
+
+        <button type="submit" class="btn-login btn-login-submit">Salvar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="overlay_categoria" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Adicionar Categoria</h2>
+        <button id="btn_fecharCategoria" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form_categoria">
+        <label for="input_nomeCategoria">Nome</label>
+        <input type="text" id="input_nomeCategoria" placeholder="Ex: Alimentação" required>
+
+        <label for="input_tipoCategoria">Tipo</label>
+        <select id="input_tipoCategoria" required>
+          <option value="0">Despesa</option>
+          <option value="1">Receita</option>
+        </select>
+
+        <p id="msg_erroCategoria" class="msg-erro"></p>
+
+        <button type="submit" class="btn-login btn-login-submit">Salvar</button>
+      </form>
+    </div>
   </div>
 
   <script src="json/main.js"></script>

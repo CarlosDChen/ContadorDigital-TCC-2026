@@ -21,6 +21,28 @@ const usuarioParaResposta = (usuario) => {
   return dados
 }
 
+// Categorias criadas automaticamente para todo usuario novo
+const CATEGORIAS_PADRAO = [
+  { nome: 'Entretenimento', tipo: 0 },
+  { nome: 'Alimentação', tipo: 0 },
+  { nome: 'Moradia', tipo: 0 },
+  { nome: 'Transporte', tipo: 0 },
+  { nome: 'Compra Pessoal', tipo: 0 },
+  { nome: 'Saúde', tipo: 0 },
+  { nome: 'Educação', tipo: 0 },
+  { nome: 'Assinaturas e Serviços', tipo: 0 },
+  { nome: 'Pets', tipo: 0 },
+  { nome: 'Viagem', tipo: 0 },
+  { nome: 'Outro', tipo: 0 },
+  { nome: 'Ativa', tipo: 1 },
+  { nome: 'Ativa Secundária', tipo: 1 },
+  { nome: 'Passiva', tipo: 1 },
+  { nome: 'Vendas', tipo: 1 },
+  { nome: 'Ganhos Eventuais', tipo: 1 },
+  { nome: 'Benefícios', tipo: 1 },
+  { nome: 'Outro', tipo: 1 }
+]
+
 const listarUsuarios = async (req, res) => {
   const resultado = await pool.query('select * from usuario order by idusuario')
 
@@ -58,8 +80,12 @@ const criarUsuario = async (req, res) => {
     })
   }
 
+  const client = await pool.connect()
+
   try {
-    const resultado = await pool.query(
+    await client.query('BEGIN')
+
+    const resultado = await client.query(
       `insert into usuario (cpfuso, cpf_hash, email, tell, nomeuso, nomefanusu, senhauso)
        values ($1, $2, $3, $4, $5, $6, $7)
        returning idusuario`,
@@ -74,8 +100,19 @@ const criarUsuario = async (req, res) => {
       ]
     )
 
+    const idUsuario = resultado.rows[0].idusuario
+
+    for (const categoria of CATEGORIAS_PADRAO) {
+      await client.query(
+        'insert into categoria (idusuario, nomecatego, tipocatego) values ($1, $2, $3)',
+        [idUsuario, categoria.nome, categoria.tipo]
+      )
+    }
+
+    await client.query('COMMIT')
+
     const novoUsuario = new Usuario(
-      resultado.rows[0].idusuario,
+      idUsuario,
       dadosUsuario.cpfUso,
       dadosUsuario.email,
       dadosUsuario.telefone,
@@ -89,12 +126,16 @@ const criarUsuario = async (req, res) => {
       usuario: usuarioParaResposta(novoUsuario)
     })
   } catch (erro) {
+    await client.query('ROLLBACK')
+
     if (erro.code === '23505') {
       return res.status(409).json({
         erro: 'CPF ja cadastrado'
       })
     }
     throw erro
+  } finally {
+    client.release()
   }
 }
 
