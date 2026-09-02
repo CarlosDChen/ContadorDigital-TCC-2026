@@ -128,23 +128,32 @@
       color: #333;
     }
 
-    #form_login {
+    #form_login,
+    #form_2fa {
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
 
-    #form_login label {
+    #form_login label,
+    #form_2fa label {
       font-size: 0.85rem;
       color: #555;
       margin-top: 8px;
     }
 
-    #form_login input {
+    #form_login input,
+    #form_2fa input {
       padding: 8px 12px;
       border: 1px solid #d1d5db;
       border-radius: 6px;
       font-size: 0.9rem;
+    }
+
+    #form_2fa input {
+      text-align: center;
+      font-size: 1.3rem;
+      letter-spacing: 6px;
     }
 
     .btn-login-submit {
@@ -227,6 +236,17 @@
       font-size: 0.85rem;
       margin-top: 8px;
       min-height: 1em;
+    }
+
+    .contador-caracteres {
+      font-size: 0.75rem;
+      color: #898781;
+      margin-top: 4px;
+    }
+
+    .contador-caracteres.aviso-limite {
+      color: #ef4444;
+      font-weight: 600;
     }
 
     .main {

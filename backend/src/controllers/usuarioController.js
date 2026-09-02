@@ -1,6 +1,11 @@
 const pool = require('../config/db')
 const Usuario = require('../models/usuarioModel')
 const { encrypt, decrypt, hashCpf } = require('../utils/cryptoUtils')
+const { enviarCodigo2FA } = require('../utils/emailUtils')
+
+// Codigos de 2FA pendentes de confirmacao, em memoria: idUsuario -> { codigo, expiraEm }
+const codigos2FA = new Map()
+const VALIDADE_CODIGO_MS = 5 * 60 * 1000
 
 // Converte uma linha do banco (campos criptografados) num Usuario
 // com os valores em claro, sempre passando pelo constructor/setters da classe
@@ -21,28 +26,6 @@ const usuarioParaResposta = (usuario) => {
   return dados
 }
 
-// Categorias criadas automaticamente para todo usuario novo
-const CATEGORIAS_PADRAO = [
-  { nome: 'Entretenimento', tipo: 0 },
-  { nome: 'Alimentação', tipo: 0 },
-  { nome: 'Moradia', tipo: 0 },
-  { nome: 'Transporte', tipo: 0 },
-  { nome: 'Compra Pessoal', tipo: 0 },
-  { nome: 'Saúde', tipo: 0 },
-  { nome: 'Educação', tipo: 0 },
-  { nome: 'Assinaturas e Serviços', tipo: 0 },
-  { nome: 'Pets', tipo: 0 },
-  { nome: 'Viagem', tipo: 0 },
-  { nome: 'Outro', tipo: 0 },
-  { nome: 'Ativa', tipo: 1 },
-  { nome: 'Ativa Secundária', tipo: 1 },
-  { nome: 'Passiva', tipo: 1 },
-  { nome: 'Vendas', tipo: 1 },
-  { nome: 'Ganhos Eventuais', tipo: 1 },
-  { nome: 'Benefícios', tipo: 1 },
-  { nome: 'Outro', tipo: 1 }
-]
-
 const listarUsuarios = async (req, res) => {
   const resultado = await pool.query('select * from usuario order by idusuario')
 
@@ -59,6 +42,18 @@ const criarUsuario = async (req, res) => {
   if (!dadosUsuario.email || !dadosUsuario.email.includes('@')) {
     return res.status(400).json({
       erro: 'Email invalido'
+    })
+  }
+
+  if (!dadosUsuario.nomeUso) {
+    return res.status(400).json({
+      erro: 'O nome e obrigatorio'
+    })
+  }
+
+  if (!dadosUsuario.nomeFanUso || dadosUsuario.nomeFanUso.length > 20) {
+    return res.status(400).json({
+      erro: 'O usuario deve ter no maximo 20 caracteres'
     })
   }
 
@@ -102,10 +97,17 @@ const criarUsuario = async (req, res) => {
 
     const idUsuario = resultado.rows[0].idusuario
 
-    for (const categoria of CATEGORIAS_PADRAO) {
+    // As categorias padrao vem da tabela categoria_padrao (fonte unica da verdade),
+    // cada uma virando uma linha propria e editavel para esse usuario, ligada
+    // de volta ao padrao de origem via idtemplate
+    const templates = await client.query(
+      'select idtemplate, nome, tipo from categoria_padrao order by idtemplate'
+    )
+
+    for (const template of templates.rows) {
       await client.query(
-        'insert into categoria (idusuario, nomecatego, tipocatego) values ($1, $2, $3)',
-        [idUsuario, categoria.nome, categoria.tipo]
+        'insert into categoria (idusuario, nomecatego, tipocatego, idtemplate) values ($1, $2, $3, $4)',
+        [idUsuario, template.nome, template.tipo, template.idtemplate]
       )
     }
 
@@ -180,6 +182,7 @@ const atualizarUsuario = async (req, res) => {
   })
 }
 
+// Etapa 1 do login: valida email/senha e envia o codigo de 2FA por email
 const loginUsuario = async (req, res) => {
   const { email, senhaUso } = req.body
 
@@ -204,6 +207,59 @@ const loginUsuario = async (req, res) => {
       erro: 'Email ou senha invalidos'
     })
   }
+
+  const codigo = String(Math.floor(100000 + Math.random() * 900000))
+
+  codigos2FA.set(usuarioEncontrado.idUsuario, {
+    codigo,
+    expiraEm: Date.now() + VALIDADE_CODIGO_MS
+  })
+
+  await enviarCodigo2FA(usuarioEncontrado.email, codigo)
+
+  res.status(200).json({
+    mensagem: 'Codigo de verificacao enviado para o seu email',
+    requer2FA: true,
+    idUsuario: usuarioEncontrado.idUsuario
+  })
+}
+
+// Etapa 2 do login: confirma o codigo de 2FA e libera a sessao
+const verificarCodigo2FA = async (req, res) => {
+  const { idUsuario, codigo } = req.body
+
+  if (!idUsuario || !codigo) {
+    return res.status(400).json({
+      erro: 'idUsuario e codigo sao obrigatorios'
+    })
+  }
+
+  const pendente = codigos2FA.get(idUsuario)
+
+  if (!pendente || Date.now() > pendente.expiraEm) {
+    codigos2FA.delete(idUsuario)
+    return res.status(401).json({
+      erro: 'Codigo expirado ou nao solicitado. Faca login novamente.'
+    })
+  }
+
+  if (pendente.codigo !== String(codigo)) {
+    return res.status(401).json({
+      erro: 'Codigo invalido'
+    })
+  }
+
+  codigos2FA.delete(idUsuario)
+
+  const resultado = await pool.query('select * from usuario where idusuario = $1', [idUsuario])
+
+  if (resultado.rows.length === 0) {
+    return res.status(404).json({
+      erro: 'Usuario nao encontrado'
+    })
+  }
+
+  const usuarioEncontrado = linhaParaUsuario(resultado.rows[0])
 
   res.status(200).json({
     mensagem: 'Login realizado com sucesso',
@@ -233,5 +289,6 @@ module.exports = {
   buscarUsuarioPorId,
   atualizarUsuario,
   deletarUsuario,
-  loginUsuario
+  loginUsuario,
+  verificarCodigo2FA
 }

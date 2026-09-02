@@ -5,6 +5,7 @@ class Categoria {
     #tipoCategoria
     #descCategoria
     #importanciaCategoria
+    #idTemplate
 
     constructor(
         idCategoria,
@@ -12,7 +13,8 @@ class Categoria {
         nomeCategoria,
         tipoCategoria,
         descCategoria,
-        importanciaCategoria
+        importanciaCategoria,
+        idTemplate
     ) {
         this.#idCategoria = idCategoria
         this.#idUsuario = idUsuario
@@ -20,6 +22,7 @@ class Categoria {
         this.#tipoCategoria = tipoCategoria
         this.#descCategoria = descCategoria
         this.#importanciaCategoria = importanciaCategoria
+        this.#idTemplate = idTemplate
     }
 
     get idCategoria() {
@@ -70,6 +73,16 @@ class Categoria {
         this.#importanciaCategoria = valor
     }
 
+    // Liga essa categoria de volta a linha correspondente em categoria_padrao
+    // (null quando a categoria foi criada manualmente pelo usuario, sem padrao de origem)
+    get idTemplate() {
+        return this.#idTemplate
+    }
+
+    set idTemplate(valor) {
+        this.#idTemplate = valor
+    }
+
     toJSON() {
         return {
             idCategoria: this.#idCategoria,
@@ -77,7 +90,8 @@ class Categoria {
             nomeCategoria: this.#nomeCategoria,
             tipoCategoria: this.#tipoCategoria,
             descCategoria: this.#descCategoria,
-            importanciaCategoria: this.#importanciaCategoria
+            importanciaCategoria: this.#importanciaCategoria,
+            idTemplate: this.#idTemplate
         }
     }
 }
