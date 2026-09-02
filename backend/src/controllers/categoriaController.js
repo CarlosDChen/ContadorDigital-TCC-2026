@@ -7,7 +7,8 @@ const linhaParaCategoria = (linha) => new Categoria(
   linha.nomecatego,
   linha.tipocatego,
   linha.desccatego,
-  linha.imporcatego
+  linha.imporcatego,
+  linha.idtemplate
 )
 
 const listarCategorias = async (req, res) => {

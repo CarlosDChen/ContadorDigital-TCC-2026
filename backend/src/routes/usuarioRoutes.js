@@ -10,7 +10,8 @@ const {
   buscarUsuarioPorId,
   atualizarUsuario,
   deletarUsuario,
-  loginUsuario
+  loginUsuario,
+  verificarCodigo2FA
 } = require('../controllers/usuarioController')
 
 router.get('/usuarios', listarUsuarios)
@@ -18,6 +19,8 @@ router.get('/usuarios', listarUsuarios)
 router.post('/usuarios', criarUsuario)
 
 router.post('/login', loginUsuario)
+
+router.post('/login/verificar-codigo', verificarCodigo2FA)
 
 router.get('/usuarios/id/:id', buscarUsuarioPorId)
 

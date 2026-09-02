@@ -33,17 +33,37 @@ if (btnLogin && overlayLogin) {
     const formLogin = document.getElementById("form_login");
     const msgErroLogin = document.getElementById("msg_erroLogin");
 
+    const overlay2fa = document.getElementById("overlay_2fa");
+    const btnFechar2fa = document.getElementById("btn_fechar2fa");
+    const form2fa = document.getElementById("form_2fa");
+    const msgErro2fa = document.getElementById("msg_erro2fa");
+    const inputCodigo2fa = document.getElementById("input_codigo2fa");
+
+    let idUsuarioPendente2fa = null;
+
     btnLogin.addEventListener("click", () => {
         overlayLogin.classList.add("active");
     });
 
     btnFecharLogin.addEventListener("click", () => {
         overlayLogin.classList.remove("active");
+        formLogin.reset();
     });
 
     overlayLogin.addEventListener("click", (event) => {
         if (event.target === overlayLogin) {
             overlayLogin.classList.remove("active");
+        }
+    });
+
+    btnFechar2fa.addEventListener("click", () => {
+        overlay2fa.classList.remove("active");
+        form2fa.reset();
+    });
+
+    overlay2fa.addEventListener("click", (event) => {
+        if (event.target === overlay2fa) {
+            overlay2fa.classList.remove("active");
         }
     });
 
@@ -68,6 +88,37 @@ if (btnLogin && overlayLogin) {
                 return;
             }
 
+            idUsuarioPendente2fa = dados.idUsuario;
+            overlayLogin.classList.remove("active");
+            formLogin.reset();
+            overlay2fa.classList.add("active");
+            inputCodigo2fa.focus();
+        } catch (erro) {
+            msgErroLogin.textContent = "Não foi possível conectar ao servidor.";
+        }
+    });
+
+    form2fa.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        msgErro2fa.textContent = "";
+
+        try {
+            const resposta = await fetch("http://localhost:3000/login/verificar-codigo", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    idUsuario: idUsuarioPendente2fa,
+                    codigo: inputCodigo2fa.value.trim()
+                })
+            });
+
+            const dados = await resposta.json();
+
+            if (!resposta.ok) {
+                msgErro2fa.textContent = dados.erro || "Não foi possível confirmar o código.";
+                return;
+            }
+
             localStorage.setItem("usuarioLogado", JSON.stringify({
                 idUsuario: dados.usuario.idUsuario,
                 nomeUso: dados.usuario.nomeUso
@@ -75,7 +126,7 @@ if (btnLogin && overlayLogin) {
 
             window.location.href = "index.html";
         } catch (erro) {
-            msgErroLogin.textContent = "Não foi possível conectar ao servidor.";
+            msgErro2fa.textContent = "Não foi possível conectar ao servidor.";
         }
     });
 }
@@ -133,6 +184,16 @@ function aplicarMascaraData(valor) {
         .slice(0, 8)
         .replace(/(\d{2})(\d)/, "$1/$2")
         .replace(/(\d{2})(\d{1,4})$/, "$1/$2");
+}
+
+const inputUsuario = document.getElementById("input_usuario");
+const contadorUsuario = document.getElementById("contador_usuario");
+if (inputUsuario && contadorUsuario) {
+    inputUsuario.addEventListener("input", () => {
+        const tamanho = inputUsuario.value.length;
+        contadorUsuario.textContent = tamanho + "/20 caracteres";
+        contadorUsuario.classList.toggle("aviso-limite", tamanho >= 20);
+    });
 }
 
 const inputCpf = document.getElementById("input_cpf");
@@ -279,7 +340,7 @@ if (tabelaLancamentos) {
     };
 
     const popularSelectCategorias = (tipo) => {
-        selectCategoriaLancamento.innerHTML = '<option value="">Sem categoria</option>';
+        selectCategoriaLancamento.innerHTML = '<option value="" disabled selected>Selecione uma categoria</option>';
         categorias
             .filter((categoria) => categoria.tipoCategoria === tipo)
             .sort((a, b) => (a.nomeCategoria === "Outro") - (b.nomeCategoria === "Outro"))
@@ -348,6 +409,11 @@ if (tabelaLancamentos) {
         const idCategoria = selectCategoriaLancamento.value;
         const data = inputDataLancamento.value;
 
+        if (!idCategoria) {
+            msgErroLancamento.textContent = "Selecione uma categoria.";
+            return;
+        }
+
         if (!/^\d{2}\/\d{2}\/\d{4}$/.test(data)) {
             msgErroLancamento.textContent = "A data deve estar completa, no formato dd/mm/aaaa.";
             return;
@@ -362,7 +428,7 @@ if (tabelaLancamentos) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     idUsuario: usuarioLogado.idUsuario,
-                    idCategoria: idCategoria ? Number(idCategoria) : null,
+                    idCategoria: Number(idCategoria),
                     nomeValor: descricao,
                     valorValor: valor,
                     recorValor: 0,

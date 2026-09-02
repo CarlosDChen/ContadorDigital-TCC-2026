@@ -51,23 +51,28 @@ const criarValor = async (req, res) => {
     })
   }
 
-  if (dadosValor.idCategoria) {
-    const resultadoCategoria = await pool.query(
-      'select tipocatego from categoria where idcatego = $1',
-      [dadosValor.idCategoria]
-    )
+  // RD-02: todo lançamento deve pertencer obrigatoriamente a uma categoria
+  if (!dadosValor.idCategoria) {
+    return res.status(400).json({
+      erro: 'A categoria e obrigatoria'
+    })
+  }
 
-    if (resultadoCategoria.rows.length === 0) {
-      return res.status(400).json({
-        erro: 'Categoria informada nao existe'
-      })
-    }
+  const resultadoCategoria = await pool.query(
+    'select tipocatego from categoria where idcatego = $1',
+    [dadosValor.idCategoria]
+  )
 
-    if (resultadoCategoria.rows[0].tipocatego !== dadosValor.receitaDespesa) {
-      return res.status(400).json({
-        erro: 'A categoria selecionada nao corresponde ao tipo do lançamento (receita/despesa)'
-      })
-    }
+  if (resultadoCategoria.rows.length === 0) {
+    return res.status(400).json({
+      erro: 'Categoria informada nao existe'
+    })
+  }
+
+  if (resultadoCategoria.rows[0].tipocatego !== dadosValor.receitaDespesa) {
+    return res.status(400).json({
+      erro: 'A categoria selecionada nao corresponde ao tipo do lançamento (receita/despesa)'
+    })
   }
 
   try {

@@ -39,6 +39,25 @@
     </div>
   </div>
 
+  <div id="overlay_2fa" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Verificação em duas etapas</h2>
+        <button id="btn_fechar2fa" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="form_2fa">
+        <p>Enviamos um código de 6 dígitos para o seu e-mail.</p>
+
+        <label for="input_codigo2fa">Código de verificação</label>
+        <input type="text" id="input_codigo2fa" inputmode="numeric" maxlength="6" placeholder="000000" required>
+
+        <p id="msg_erro2fa" class="msg-erro"></p>
+
+        <button type="submit" class="btn-login btn-login-submit">Confirmar</button>
+      </form>
+    </div>
+  </div>
+
   <script src="json/main.js"></script>
 </body>
 </html>
