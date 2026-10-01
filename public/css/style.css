@@ -238,6 +238,12 @@
       min-height: 1em;
     }
 
+    .texto-explicativo {
+      font-size: 0.75rem;
+      color: #898781;
+      font-weight: 400;
+    }
+
     .contador-caracteres {
       font-size: 0.75rem;
       color: #898781;
@@ -320,6 +326,10 @@
       align-items: start;
     }
 
+    .card-grafico-largo {
+      grid-column: 1 / -1;
+    }
+
     .card-grafico {
       background: #ffffff;
       border-radius: 8px;
@@ -344,6 +354,45 @@
       width: 200px;
       height: 200px;
       flex-shrink: 0;
+    }
+
+    .card-grafico > svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .legenda-horizontal {
+      flex-direction: row !important;
+      flex-wrap: wrap;
+      gap: 14px !important;
+      margin-top: 10px;
+    }
+
+    .eixo-grafico {
+      stroke: #e1e0d9;
+      stroke-width: 1;
+    }
+
+    .rotulo-eixo {
+      fill: #898781;
+      font-size: 9px;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    .ponto-linha-grafico {
+      cursor: pointer;
+    }
+
+    .barra-grafico {
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .barra-grafico:hover,
+    .barra-grafico:focus {
+      opacity: 0.85;
+      outline: none;
     }
 
     .legenda-grafico {
@@ -505,6 +554,22 @@
       font-family: inherit;
     }
 
+    .campo-checkbox {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    .campo-checkbox input {
+      width: auto;
+      padding: 0;
+    }
+
     .datagrid {
       width: 100%;
       border-collapse: collapse;
@@ -552,6 +617,24 @@
     .datagrid td.valor-negativo {
       color: #ef4444;
       font-weight: 600;
+    }
+
+    .badge-tipo {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-fixo {
+      background: #ede9fe;
+      color: #6d28d9;
+    }
+
+    .badge-variavel {
+      background: #f3f4f6;
+      color: #6b7280;
     }
 
     .saldo-positivo {

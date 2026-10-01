@@ -32,6 +32,7 @@
           <th>Data</th>
           <th>Descrição</th>
           <th>Categoria</th>
+          <th>Tipo</th>
           <th>Valor</th>
         </tr>
       </thead>
@@ -60,6 +61,16 @@
         <label for="input_dataLancamento">Data</label>
         <input type="text" id="input_dataLancamento" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10" required>
 
+        <label class="campo-checkbox">
+          <input type="checkbox" id="input_recorrente">
+          É recorrente? (repete todo mês a partir deste, no mesmo dia)
+        </label>
+
+        <div id="campo_dataFinal" hidden>
+          <label for="input_dataFinalLancamento">Data final (opcional)</label>
+          <input type="text" id="input_dataFinalLancamento" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10">
+        </div>
+
         <p id="msg_erroLancamento" class="msg-erro"></p>
 
         <button type="submit" class="btn-login btn-login-submit">Salvar</button>
@@ -81,6 +92,16 @@
         <select id="input_tipoCategoria" required>
           <option value="0">Despesa</option>
           <option value="1">Receita</option>
+        </select>
+
+        <label for="input_importanciaCategoria">Importância <small class="texto-explicativo">(1 mais importante, 5 menos importante)</small></label>
+        <select id="input_importanciaCategoria" required>
+          <option value="" disabled selected>Selecione</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
         </select>
 
         <p id="msg_erroCategoria" class="msg-erro"></p>

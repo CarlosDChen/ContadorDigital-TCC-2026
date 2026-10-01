@@ -312,9 +312,23 @@ if (tabelaLancamentos) {
     const selectCategoriaLancamento = document.getElementById("input_categoriaLancamento");
     const msgErroLancamento = document.getElementById("msg_erroLancamento");
     const inputDataLancamento = document.getElementById("input_dataLancamento");
+    const inputRecorrente = document.getElementById("input_recorrente");
+    const campoDataFinal = document.getElementById("campo_dataFinal");
+    const inputDataFinalLancamento = document.getElementById("input_dataFinalLancamento");
 
     inputDataLancamento.addEventListener("input", () => {
         inputDataLancamento.value = aplicarMascaraData(inputDataLancamento.value);
+    });
+
+    inputDataFinalLancamento.addEventListener("input", () => {
+        inputDataFinalLancamento.value = aplicarMascaraData(inputDataFinalLancamento.value);
+    });
+
+    inputRecorrente.addEventListener("change", () => {
+        campoDataFinal.hidden = !inputRecorrente.checked;
+        if (!inputRecorrente.checked) {
+            inputDataFinalLancamento.value = "";
+        }
     });
 
     let categorias = [];
@@ -354,7 +368,7 @@ if (tabelaLancamentos) {
 
     const carregarLancamentos = async () => {
         if (!usuarioLogado) {
-            tabelaLancamentos.innerHTML = '<tr><td colspan="4">Faça login para ver seus lançamentos.</td></tr>';
+            tabelaLancamentos.innerHTML = '<tr><td colspan="5">Faça login para ver seus lançamentos.</td></tr>';
             return;
         }
 
@@ -368,10 +382,17 @@ if (tabelaLancamentos) {
             const valorFormatado = (positivo ? "R$ " : "-R$ ") + Number(valor.valorValor).toFixed(2);
             const linha = document.createElement("tr");
 
+            // Fixo: e o proprio lançamento recorrente OU foi gerado a partir de um (RD-03/RD-09)
+            const fixo = valor.recorValor === 1 || valor.idOrigem !== null;
+            const seloTipo = fixo
+                ? '<span class="badge-tipo badge-fixo">Fixo</span>'
+                : '<span class="badge-tipo badge-variavel">Variável</span>';
+
             linha.innerHTML =
                 "<td>" + formatarDataExibicao(valor.dataEntrada) + "</td>" +
                 "<td>" + valor.nomeValor + "</td>" +
                 "<td>" + nomeCategoria(valor.idCategoria) + "</td>" +
+                "<td>" + seloTipo + "</td>" +
                 '<td class="' + (positivo ? "valor-positivo" : "valor-negativo") + '">' + valorFormatado + "</td>";
 
             tabelaLancamentos.appendChild(linha);
@@ -382,6 +403,7 @@ if (tabelaLancamentos) {
         tipoLancamentoAtual = tipo;
         tituloModalLancamento.textContent = tipo === 1 ? "Adicionar Renda" : "Adicionar Gasto";
         formLancamento.reset();
+        campoDataFinal.hidden = true;
         msgErroLancamento.textContent = "";
         popularSelectCategorias(tipo);
         overlayLancamento.classList.add("active");
@@ -422,23 +444,60 @@ if (tabelaLancamentos) {
         const [dia, mes, ano] = data.split("/");
         const dataEntrada = ano + mes + dia;
 
+        const recorrente = inputRecorrente.checked;
+        let dataFinal = null;
+
+        if (recorrente && inputDataFinalLancamento.value) {
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(inputDataFinalLancamento.value)) {
+                msgErroLancamento.textContent = "A data final deve estar completa, no formato dd/mm/aaaa.";
+                return;
+            }
+
+            const [diaFinal, mesFinal, anoFinal] = inputDataFinalLancamento.value.split("/");
+            dataFinal = anoFinal + mesFinal + diaFinal;
+
+            if (dataFinal < dataEntrada) {
+                msgErroLancamento.textContent = "A data final não pode ser antes da data do lançamento.";
+                return;
+            }
+        }
+
+        const dadosLancamento = {
+            idUsuario: usuarioLogado.idUsuario,
+            idCategoria: Number(idCategoria),
+            nomeValor: descricao,
+            valorValor: valor,
+            recorValor: recorrente ? 1 : 0,
+            receitaDespesa: tipoLancamentoAtual,
+            dataEntrada: dataEntrada,
+            dataFinal: dataFinal,
+            discricao: ""
+        };
+
         try {
-            const resposta = await fetch("http://localhost:3000/valores", {
+            let resposta = await fetch("http://localhost:3000/valores", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    idUsuario: usuarioLogado.idUsuario,
-                    idCategoria: Number(idCategoria),
-                    nomeValor: descricao,
-                    valorValor: valor,
-                    recorValor: 0,
-                    receitaDespesa: tipoLancamentoAtual,
-                    dataEntrada: dataEntrada,
-                    discricao: ""
-                })
+                body: JSON.stringify(dadosLancamento)
             });
 
-            const dados = await resposta.json();
+            let dados = await resposta.json();
+
+            if (!resposta.ok && dados.possivelDuplicado) {
+                const confirmou = window.confirm(dados.erro);
+
+                if (!confirmou) {
+                    return;
+                }
+
+                resposta = await fetch("http://localhost:3000/valores", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...dadosLancamento, confirmarDuplicado: true })
+                });
+
+                dados = await resposta.json();
+            }
 
             if (!resposta.ok) {
                 msgErroLancamento.textContent = dados.erro || "Não foi possível salvar o lançamento.";
@@ -479,6 +538,7 @@ if (tabelaLancamentos) {
 
         const nome = document.getElementById("input_nomeCategoria").value.trim();
         const tipo = document.getElementById("input_tipoCategoria").value;
+        const importancia = document.getElementById("input_importanciaCategoria").value;
 
         try {
             const resposta = await fetch("http://localhost:3000/categorias", {
@@ -487,7 +547,8 @@ if (tabelaLancamentos) {
                 body: JSON.stringify({
                     idUsuario: usuarioLogado.idUsuario,
                     nomeCategoria: nome,
-                    tipoCategoria: Number(tipo)
+                    tipoCategoria: Number(tipo),
+                    importanciaCategoria: Number(importancia)
                 })
             });
 
@@ -556,14 +617,31 @@ if (rendaEl) {
 const graficoPizzaGastos = document.getElementById("grafico_pizza_gastos");
 if (graficoPizzaGastos) {
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
-    const legendaPizza = document.getElementById("legenda_pizza_gastos");
-    const tabelaPizzaCorpo = document.querySelector("#tabela_pizza_gastos tbody");
     const tooltipGrafico = document.getElementById("tooltip_grafico");
     const selectMesAno = document.getElementById("select_mesAnoRelatorio");
+
+    const legendaPizzaGastos = document.getElementById("legenda_pizza_gastos");
+    const tabelaPizzaGastosCorpo = document.querySelector("#tabela_pizza_gastos tbody");
+
+    const graficoPizzaReceita = document.getElementById("grafico_pizza_receita");
+    const legendaPizzaReceita = document.getElementById("legenda_pizza_receita");
+    const tabelaPizzaReceitaCorpo = document.querySelector("#tabela_pizza_receita tbody");
+
+    const graficoLinhaRenda = document.getElementById("grafico_linha_renda");
+    const tabelaLinhaRendaCorpo = document.querySelector("#tabela_linha_renda tbody");
+
+    const graficoBarrasCategorias = document.getElementById("grafico_barras_categorias");
+    const legendaBarrasCategorias = document.getElementById("legenda_barras_categorias");
+    const tabelaBarrasCorpo = document.querySelector("#tabela_barras_categorias tbody");
 
     const NOMES_MESES = [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
+    const NOMES_MESES_ABREV = [
+        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+        "Jul", "Ago", "Set", "Out", "Nov", "Dez"
     ];
 
     // Ordem fixa da paleta categórica (nunca ciclada arbitrariamente)
@@ -571,6 +649,10 @@ if (graficoPizzaGastos) {
         "#2a78d6", "#eb6834", "#1baf7a", "#eda100",
         "#e87ba4", "#008300", "#4a3aa7", "#e34948"
     ];
+
+    const COR_RENDA = "#22c55e";
+    const COR_OUTROS = "#9ca3af";
+    const svgNS = "http://www.w3.org/2000/svg";
 
     const polarParaCartesiano = (cx, cy, raio, anguloGraus) => {
         const anguloRad = (anguloGraus - 90) * Math.PI / 180;
@@ -595,33 +677,46 @@ if (graficoPizzaGastos) {
 
     const formatarMoeda = (valor) => "R$ " + valor.toFixed(2);
 
-    const mostrarTooltipGrafico = (evento, valor, percentual, nome) => {
+    const mostrarTooltip = (evento, linhas) => {
         tooltipGrafico.innerHTML = "";
 
-        const linhaValor = document.createElement("strong");
-        linhaValor.textContent = formatarMoeda(valor);
+        linhas.forEach((linha, indice) => {
+            const elemento = document.createElement(indice === 0 ? "strong" : "span");
+            elemento.textContent = linha;
+            tooltipGrafico.appendChild(elemento);
+        });
 
-        const linhaNome = document.createElement("span");
-        linhaNome.textContent = nome + " · " + percentual.toFixed(1) + "%";
-
-        tooltipGrafico.appendChild(linhaValor);
-        tooltipGrafico.appendChild(linhaNome);
         tooltipGrafico.classList.add("ativo");
         tooltipGrafico.style.left = evento.clientX + 12 + "px";
         tooltipGrafico.style.top = evento.clientY + 12 + "px";
     };
 
-    const esconderTooltipGrafico = () => {
+    const esconderTooltip = () => {
         tooltipGrafico.classList.remove("ativo");
     };
 
-    const renderizarGraficoPizza = (dados) => {
-        const svgNS = "http://www.w3.org/2000/svg";
+    const agruparComOutros = (somaPorCategoria) => {
+        let dados = Object.entries(somaPorCategoria)
+            .map(([nome, valor]) => ({ nome, valor }))
+            .sort((a, b) => b.valor - a.valor);
+
+        // Mais de 8 fatias vira ruído visual e estoura a paleta segura -> dobra a cauda em "Outros"
+        if (dados.length > 8) {
+            const principais = dados.slice(0, 7);
+            const somaRestante = dados.slice(7).reduce((soma, item) => soma + item.valor, 0);
+            dados = principais.concat([{ nome: "Outros", valor: somaRestante }]);
+        }
+
+        return dados;
+    };
+
+    const renderizarGraficoPizza = (dados, elementos, mensagemVazia) => {
+        const { svg, legenda, tabelaCorpo } = elementos;
         const total = dados.reduce((soma, item) => soma + item.valor, 0);
 
-        graficoPizzaGastos.innerHTML = "";
-        legendaPizza.innerHTML = "";
-        tabelaPizzaCorpo.innerHTML = "";
+        svg.innerHTML = "";
+        legenda.innerHTML = "";
+        tabelaCorpo.innerHTML = "";
 
         if (total === 0) {
             const mensagem = document.createElementNS(svgNS, "text");
@@ -630,8 +725,8 @@ if (graficoPizzaGastos) {
             mensagem.setAttribute("text-anchor", "middle");
             mensagem.setAttribute("fill", "#898781");
             mensagem.setAttribute("font-size", "11");
-            mensagem.textContent = "Sem gastos neste mês";
-            graficoPizzaGastos.appendChild(mensagem);
+            mensagem.textContent = mensagemVazia;
+            svg.appendChild(mensagem);
             return;
         }
 
@@ -651,14 +746,17 @@ if (graficoPizzaGastos) {
             path.classList.add("fatia-grafico");
             path.tabIndex = 0;
 
-            const aoInteragir = (evento) => mostrarTooltipGrafico(evento, item.valor, percentual, item.nome);
+            const aoInteragir = (evento) => mostrarTooltip(evento, [
+                formatarMoeda(item.valor),
+                item.nome + " · " + percentual.toFixed(1) + "%"
+            ]);
             path.addEventListener("pointermove", aoInteragir);
             path.addEventListener("pointerenter", aoInteragir);
             path.addEventListener("focus", aoInteragir);
-            path.addEventListener("pointerleave", esconderTooltipGrafico);
-            path.addEventListener("blur", esconderTooltipGrafico);
+            path.addEventListener("pointerleave", esconderTooltip);
+            path.addEventListener("blur", esconderTooltip);
 
-            graficoPizzaGastos.appendChild(path);
+            svg.appendChild(path);
 
             const itemLegenda = document.createElement("li");
             const marcador = document.createElement("span");
@@ -670,7 +768,7 @@ if (graficoPizzaGastos) {
 
             itemLegenda.appendChild(marcador);
             itemLegenda.appendChild(textoLegenda);
-            legendaPizza.appendChild(itemLegenda);
+            legenda.appendChild(itemLegenda);
 
             const linhaTabela = document.createElement("tr");
             const celulaNome = document.createElement("td");
@@ -683,9 +781,267 @@ if (graficoPizzaGastos) {
             linhaTabela.appendChild(celulaNome);
             linhaTabela.appendChild(celulaValor);
             linhaTabela.appendChild(celulaPercentual);
-            tabelaPizzaCorpo.appendChild(linhaTabela);
+            tabelaCorpo.appendChild(linhaTabela);
 
             anguloAtual = anguloFinal;
+        });
+    };
+
+    const renderizarGraficoLinha = (pontos) => {
+        const svgLargura = 400;
+        const svgAltura = 220;
+        const padEsq = 46;
+        const padDir = 16;
+        const padTopo = 16;
+        const padBase = 30;
+        const larguraUtil = svgLargura - padEsq - padDir;
+        const alturaUtil = svgAltura - padTopo - padBase;
+
+        graficoLinhaRenda.innerHTML = "";
+        tabelaLinhaRendaCorpo.innerHTML = "";
+
+        if (pontos.length === 0) {
+            const mensagem = document.createElementNS(svgNS, "text");
+            mensagem.setAttribute("x", String(svgLargura / 2));
+            mensagem.setAttribute("y", String(svgAltura / 2));
+            mensagem.setAttribute("text-anchor", "middle");
+            mensagem.setAttribute("fill", "#898781");
+            mensagem.setAttribute("font-size", "11");
+            mensagem.textContent = "Sem lançamentos de renda registrados";
+            graficoLinhaRenda.appendChild(mensagem);
+            return;
+        }
+
+        const valorMaximo = Math.max(...pontos.map((ponto) => ponto.valor), 1) * 1.15;
+
+        const coordenadaX = (indice) => pontos.length === 1
+            ? padEsq + larguraUtil / 2
+            : padEsq + (indice / (pontos.length - 1)) * larguraUtil;
+
+        const coordenadaY = (valor) => padTopo + (1 - valor / valorMaximo) * alturaUtil;
+
+        for (let i = 0; i <= 4; i++) {
+            const valorGrade = (valorMaximo / 4) * i;
+            const y = coordenadaY(valorGrade);
+
+            const linhaGrade = document.createElementNS(svgNS, "line");
+            linhaGrade.setAttribute("x1", String(padEsq));
+            linhaGrade.setAttribute("x2", String(svgLargura - padDir));
+            linhaGrade.setAttribute("y1", String(y));
+            linhaGrade.setAttribute("y2", String(y));
+            linhaGrade.classList.add("eixo-grafico");
+            graficoLinhaRenda.appendChild(linhaGrade);
+
+            const rotuloY = document.createElementNS(svgNS, "text");
+            rotuloY.setAttribute("x", String(padEsq - 6));
+            rotuloY.setAttribute("y", String(y + 3));
+            rotuloY.setAttribute("text-anchor", "end");
+            rotuloY.classList.add("rotulo-eixo");
+            rotuloY.textContent = "R$ " + Math.round(valorGrade);
+            graficoLinhaRenda.appendChild(rotuloY);
+        }
+
+        const caminho = pontos
+            .map((ponto, indice) => (indice === 0 ? "M" : "L") + " " + coordenadaX(indice) + " " + coordenadaY(ponto.valor))
+            .join(" ");
+
+        const path = document.createElementNS(svgNS, "path");
+        path.setAttribute("d", caminho);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", COR_RENDA);
+        path.setAttribute("stroke-width", "2");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        graficoLinhaRenda.appendChild(path);
+
+        pontos.forEach((ponto, indice) => {
+            const x = coordenadaX(indice);
+            const y = coordenadaY(ponto.valor);
+            const ano = ponto.anoMes.slice(0, 4);
+            const mesNumero = Number(ponto.anoMes.slice(4, 6));
+            const rotuloMesCompleto = NOMES_MESES[mesNumero - 1] + "/" + ano;
+
+            const rotuloX = document.createElementNS(svgNS, "text");
+            rotuloX.setAttribute("x", String(x));
+            rotuloX.setAttribute("y", String(svgAltura - padBase + 16));
+            rotuloX.setAttribute("text-anchor", "middle");
+            rotuloX.classList.add("rotulo-eixo");
+            rotuloX.textContent = NOMES_MESES_ABREV[mesNumero - 1] + "/" + ano.slice(2);
+            graficoLinhaRenda.appendChild(rotuloX);
+
+            const areaClique = document.createElementNS(svgNS, "circle");
+            areaClique.setAttribute("cx", String(x));
+            areaClique.setAttribute("cy", String(y));
+            areaClique.setAttribute("r", "12");
+            areaClique.setAttribute("fill", "transparent");
+            areaClique.classList.add("ponto-linha-grafico");
+            areaClique.tabIndex = 0;
+
+            const pontoVisivel = document.createElementNS(svgNS, "circle");
+            pontoVisivel.setAttribute("cx", String(x));
+            pontoVisivel.setAttribute("cy", String(y));
+            pontoVisivel.setAttribute("r", "4");
+            pontoVisivel.setAttribute("fill", COR_RENDA);
+            pontoVisivel.setAttribute("stroke", "#ffffff");
+            pontoVisivel.setAttribute("stroke-width", "2");
+
+            const aoInteragir = (evento) => mostrarTooltip(evento, [formatarMoeda(ponto.valor), rotuloMesCompleto]);
+            areaClique.addEventListener("pointermove", aoInteragir);
+            areaClique.addEventListener("pointerenter", aoInteragir);
+            areaClique.addEventListener("focus", aoInteragir);
+            areaClique.addEventListener("pointerleave", esconderTooltip);
+            areaClique.addEventListener("blur", esconderTooltip);
+
+            graficoLinhaRenda.appendChild(pontoVisivel);
+            graficoLinhaRenda.appendChild(areaClique);
+
+            const linhaTabela = document.createElement("tr");
+            const celulaMes = document.createElement("td");
+            celulaMes.textContent = rotuloMesCompleto;
+            const celulaValor = document.createElement("td");
+            celulaValor.textContent = formatarMoeda(ponto.valor);
+            linhaTabela.appendChild(celulaMes);
+            linhaTabela.appendChild(celulaValor);
+            tabelaLinhaRendaCorpo.appendChild(linhaTabela);
+        });
+    };
+
+    const renderizarGraficoBarras = (top3, dadosPorMes) => {
+        const svgLargura = 400;
+        const svgAltura = 220;
+        const padEsq = 46;
+        const padDir = 16;
+        const padTopo = 16;
+        const padBase = 30;
+        const larguraUtil = svgLargura - padEsq - padDir;
+        const alturaUtil = svgAltura - padTopo - padBase;
+
+        graficoBarrasCategorias.innerHTML = "";
+        legendaBarrasCategorias.innerHTML = "";
+        tabelaBarrasCorpo.innerHTML = "";
+
+        document.getElementById("cabecalho_barra_1").textContent = top3[0] || "-";
+        document.getElementById("cabecalho_barra_2").textContent = top3[1] || "-";
+        document.getElementById("cabecalho_barra_3").textContent = top3[2] || "-";
+
+        if (dadosPorMes.length === 0) {
+            const mensagem = document.createElementNS(svgNS, "text");
+            mensagem.setAttribute("x", String(svgLargura / 2));
+            mensagem.setAttribute("y", String(svgAltura / 2));
+            mensagem.setAttribute("text-anchor", "middle");
+            mensagem.setAttribute("fill", "#898781");
+            mensagem.setAttribute("font-size", "11");
+            mensagem.textContent = "Sem gastos registrados";
+            graficoBarrasCategorias.appendChild(mensagem);
+            return;
+        }
+
+        const cores = [PALETA_CATEGORICA[0], PALETA_CATEGORICA[1], PALETA_CATEGORICA[2], COR_OUTROS];
+        const chavesSerie = [...top3, "Outros"];
+
+        // Barras agrupadas (lado a lado), não empilhadas -> escala pelo maior valor individual
+        const totalMaximo = Math.max(
+            ...dadosPorMes.flatMap((mes) => chavesSerie.map((chave) => mes.valores[chave] || 0)),
+            1
+        ) * 1.15;
+
+        const larguraGrupo = larguraUtil / dadosPorMes.length;
+        const larguraGrupoUtil = larguraGrupo * 0.8;
+        const larguraBarra = larguraGrupoUtil / chavesSerie.length;
+        const coordenadaY = (valor) => padTopo + (1 - valor / totalMaximo) * alturaUtil;
+
+        for (let i = 0; i <= 4; i++) {
+            const valorGrade = (totalMaximo / 4) * i;
+            const y = coordenadaY(valorGrade);
+
+            const linhaGrade = document.createElementNS(svgNS, "line");
+            linhaGrade.setAttribute("x1", String(padEsq));
+            linhaGrade.setAttribute("x2", String(svgLargura - padDir));
+            linhaGrade.setAttribute("y1", String(y));
+            linhaGrade.setAttribute("y2", String(y));
+            linhaGrade.classList.add("eixo-grafico");
+            graficoBarrasCategorias.appendChild(linhaGrade);
+
+            const rotuloY = document.createElementNS(svgNS, "text");
+            rotuloY.setAttribute("x", String(padEsq - 6));
+            rotuloY.setAttribute("y", String(y + 3));
+            rotuloY.setAttribute("text-anchor", "end");
+            rotuloY.classList.add("rotulo-eixo");
+            rotuloY.textContent = "R$ " + Math.round(valorGrade);
+            graficoBarrasCategorias.appendChild(rotuloY);
+        }
+
+        chavesSerie.forEach((nome, indice) => {
+            const itemLegenda = document.createElement("li");
+            const marcador = document.createElement("span");
+            marcador.className = "marcador-legenda";
+            marcador.style.background = cores[indice];
+
+            const textoLegenda = document.createElement("span");
+            textoLegenda.textContent = nome;
+
+            itemLegenda.appendChild(marcador);
+            itemLegenda.appendChild(textoLegenda);
+            legendaBarrasCategorias.appendChild(itemLegenda);
+        });
+
+        dadosPorMes.forEach((mes, indiceMes) => {
+            const inicioGrupo = padEsq + indiceMes * larguraGrupo + (larguraGrupo - larguraGrupoUtil) / 2;
+            const centroGrupo = padEsq + (indiceMes + 0.5) * larguraGrupo;
+
+            const ano = mes.anoMes.slice(0, 4);
+            const mesNumero = Number(mes.anoMes.slice(4, 6));
+            const rotuloMesCompleto = NOMES_MESES[mesNumero - 1] + "/" + ano;
+
+            const rotuloX = document.createElementNS(svgNS, "text");
+            rotuloX.setAttribute("x", String(centroGrupo));
+            rotuloX.setAttribute("y", String(svgAltura - padBase + 16));
+            rotuloX.setAttribute("text-anchor", "middle");
+            rotuloX.classList.add("rotulo-eixo");
+            rotuloX.textContent = NOMES_MESES_ABREV[mesNumero - 1] + "/" + ano.slice(2);
+            graficoBarrasCategorias.appendChild(rotuloX);
+
+            const valoresLinhaTabela = [rotuloMesCompleto];
+
+            chavesSerie.forEach((chave, indiceSerie) => {
+                const valor = mes.valores[chave] || 0;
+                const x = inicioGrupo + indiceSerie * larguraBarra;
+                const y = coordenadaY(valor);
+                const altura = (padTopo + alturaUtil) - y;
+
+                if (valor > 0) {
+                    const barra = document.createElementNS(svgNS, "rect");
+                    barra.setAttribute("x", String(x));
+                    barra.setAttribute("y", String(y));
+                    barra.setAttribute("width", String(larguraBarra * 0.85));
+                    barra.setAttribute("height", String(altura));
+                    barra.setAttribute("fill", cores[indiceSerie]);
+                    barra.classList.add("barra-grafico");
+                    barra.tabIndex = 0;
+
+                    const aoInteragir = (evento) => mostrarTooltip(evento, [
+                        formatarMoeda(valor),
+                        chave + " · " + rotuloMesCompleto
+                    ]);
+                    barra.addEventListener("pointermove", aoInteragir);
+                    barra.addEventListener("pointerenter", aoInteragir);
+                    barra.addEventListener("focus", aoInteragir);
+                    barra.addEventListener("pointerleave", esconderTooltip);
+                    barra.addEventListener("blur", esconderTooltip);
+
+                    graficoBarrasCategorias.appendChild(barra);
+                }
+
+                valoresLinhaTabela.push(formatarMoeda(valor));
+            });
+
+            const linhaTabela = document.createElement("tr");
+            valoresLinhaTabela.forEach((texto) => {
+                const celula = document.createElement("td");
+                celula.textContent = texto;
+                linhaTabela.appendChild(celula);
+            });
+            tabelaBarrasCorpo.appendChild(linhaTabela);
         });
     };
 
@@ -728,50 +1084,105 @@ if (graficoPizzaGastos) {
         selectMesAno.value = anosMeses.includes(anoMesAtual) ? anoMesAtual : anosMeses[0];
     };
 
-    const atualizarGraficoPizza = () => {
-        const anoMesSelecionado = selectMesAno.value;
+    const somaPorCategoriaNoMes = (tipo, anoMesSelecionado) => {
         const somaPorCategoria = {};
 
         valoresCarregados
-            .filter((valor) => valor.receitaDespesa === 0 && valor.dataEntrada.slice(0, 6) === anoMesSelecionado)
+            .filter((valor) => valor.receitaDespesa === tipo && valor.dataEntrada.slice(0, 6) === anoMesSelecionado)
             .forEach((valor) => {
                 const nome = nomeCategoria(valor.idCategoria);
                 somaPorCategoria[nome] = (somaPorCategoria[nome] || 0) + Number(valor.valorValor);
             });
 
-        let dados = Object.entries(somaPorCategoria)
-            .map(([nome, valor]) => ({ nome, valor }))
-            .sort((a, b) => b.valor - a.valor);
-
-        // Mais de 8 fatias vira ruído visual e estoura a paleta segura -> dobra a cauda em "Outros"
-        if (dados.length > 8) {
-            const principais = dados.slice(0, 7);
-            const somaRestante = dados.slice(7).reduce((soma, item) => soma + item.valor, 0);
-            dados = principais.concat([{ nome: "Outros", valor: somaRestante }]);
-        }
-
-        renderizarGraficoPizza(dados);
+        return somaPorCategoria;
     };
 
-    const carregarGraficoPizza = async () => {
-        if (!usuarioLogado) {
-            renderizarGraficoPizza([]);
-            return;
+    const atualizarGraficosPizza = () => {
+        const anoMesSelecionado = selectMesAno.value;
+
+        renderizarGraficoPizza(
+            agruparComOutros(somaPorCategoriaNoMes(0, anoMesSelecionado)),
+            { svg: graficoPizzaGastos, legenda: legendaPizzaGastos, tabelaCorpo: tabelaPizzaGastosCorpo },
+            "Sem gastos neste mês"
+        );
+
+        renderizarGraficoPizza(
+            agruparComOutros(somaPorCategoriaNoMes(1, anoMesSelecionado)),
+            { svg: graficoPizzaReceita, legenda: legendaPizzaReceita, tabelaCorpo: tabelaPizzaReceitaCorpo },
+            "Sem receitas neste mês"
+        );
+    };
+
+    const atualizarGraficoLinha = () => {
+        const somaPorMes = {};
+
+        valoresCarregados
+            .filter((valor) => valor.receitaDespesa === 1)
+            .forEach((valor) => {
+                const anoMes = valor.dataEntrada.slice(0, 6);
+                somaPorMes[anoMes] = (somaPorMes[anoMes] || 0) + Number(valor.valorValor);
+            });
+
+        const pontos = Object.entries(somaPorMes)
+            .map(([anoMes, valor]) => ({ anoMes, valor }))
+            .sort((a, b) => a.anoMes.localeCompare(b.anoMes));
+
+        renderizarGraficoLinha(pontos);
+    };
+
+    const atualizarGraficoBarras = () => {
+        const despesas = valoresCarregados.filter((valor) => valor.receitaDespesa === 0);
+
+        const totalPorCategoria = {};
+        despesas.forEach((valor) => {
+            const nome = nomeCategoria(valor.idCategoria);
+            totalPorCategoria[nome] = (totalPorCategoria[nome] || 0) + Number(valor.valorValor);
+        });
+
+        const top3 = Object.entries(totalPorCategoria)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([nome]) => nome);
+
+        const mesesUnicos = Array.from(new Set(despesas.map((valor) => valor.dataEntrada.slice(0, 6)))).sort();
+
+        const dadosPorMes = mesesUnicos.map((anoMes) => {
+            const despesasDoMes = despesas.filter((valor) => valor.dataEntrada.slice(0, 6) === anoMes);
+            const valores = { Outros: 0 };
+
+            despesasDoMes.forEach((valor) => {
+                const nome = nomeCategoria(valor.idCategoria);
+                if (top3.includes(nome)) {
+                    valores[nome] = (valores[nome] || 0) + Number(valor.valorValor);
+                } else {
+                    valores.Outros += Number(valor.valorValor);
+                }
+            });
+
+            return { anoMes, valores };
+        });
+
+        renderizarGraficoBarras(top3, dadosPorMes);
+    };
+
+    const carregarGraficos = async () => {
+        if (usuarioLogado) {
+            const [respostaValores, respostaCategorias] = await Promise.all([
+                fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+                fetch("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
+            ]);
+
+            valoresCarregados = await respostaValores.json();
+            categoriasCarregadas = await respostaCategorias.json();
         }
-
-        const [respostaValores, respostaCategorias] = await Promise.all([
-            fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-            fetch("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
-        ]);
-
-        valoresCarregados = await respostaValores.json();
-        categoriasCarregadas = await respostaCategorias.json();
 
         popularSelectMesAno();
-        atualizarGraficoPizza();
+        atualizarGraficosPizza();
+        atualizarGraficoLinha();
+        atualizarGraficoBarras();
     };
 
-    selectMesAno.addEventListener("change", atualizarGraficoPizza);
+    selectMesAno.addEventListener("change", atualizarGraficosPizza);
 
-    carregarGraficoPizza();
+    carregarGraficos();
 }

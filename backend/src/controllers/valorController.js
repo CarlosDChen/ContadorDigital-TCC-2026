@@ -10,7 +10,9 @@ const linhaParaValor = (linha) => new Valor(
   linha.recorvalor,
   linha.rescdespes,
   linha.dataentra,
-  linha.discri
+  linha.datafinal,
+  linha.discri,
+  linha.idorigem
 )
 
 const listarValores = async (req, res) => {
@@ -75,10 +77,33 @@ const criarValor = async (req, res) => {
     })
   }
 
+  if (!dadosValor.confirmarDuplicado) {
+    const resultadoDuplicado = await pool.query(
+      `select 1 from valores
+       where idusuario = $1 and idcatego = $2 and nomevalor = $3
+         and valorvalor = $4 and rescdespes = $5 and dataentra = $6`,
+      [
+        dadosValor.idUsuario,
+        dadosValor.idCategoria,
+        dadosValor.nomeValor,
+        dadosValor.valorValor,
+        dadosValor.receitaDespesa,
+        dadosValor.dataEntrada
+      ]
+    )
+
+    if (resultadoDuplicado.rows.length > 0) {
+      return res.status(409).json({
+        possivelDuplicado: true,
+        erro: 'Já existe um lançamento igual (mesma descrição, valor, categoria e data). Deseja salvar mesmo assim?'
+      })
+    }
+  }
+
   try {
     const resultado = await pool.query(
-      `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, discri)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)
+      `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        returning *`,
       [
         dadosValor.idUsuario,
@@ -88,6 +113,7 @@ const criarValor = async (req, res) => {
         dadosValor.recorValor,
         dadosValor.receitaDespesa,
         dadosValor.dataEntrada,
+        dadosValor.dataFinal,
         dadosValor.discricao
       ]
     )
