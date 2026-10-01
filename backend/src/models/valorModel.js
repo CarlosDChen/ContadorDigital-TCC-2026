@@ -7,7 +7,9 @@ class Valor {
     #recorValor
     #receitaDespesa
     #dataEntrada
+    #dataFinal
     #discricao
+    #idOrigem
 
     constructor(
         idValor,
@@ -18,7 +20,9 @@ class Valor {
         recorValor,
         receitaDespesa,
         dataEntrada,
-        discricao
+        dataFinal,
+        discricao,
+        idOrigem
     ) {
         this.#idValor = idValor
         this.#idUsuario = idUsuario
@@ -28,7 +32,9 @@ class Valor {
         this.#recorValor = recorValor
         this.#receitaDespesa = receitaDespesa
         this.#dataEntrada = dataEntrada
+        this.#dataFinal = dataFinal
         this.#discricao = discricao
+        this.#idOrigem = idOrigem
     }
 
     get idValor() {
@@ -95,12 +101,30 @@ class Valor {
         this.#dataEntrada = valor
     }
 
+    // Data em que o lançamento recorrente deixa de se repetir (null = sem data final)
+    get dataFinal() {
+        return this.#dataFinal
+    }
+
+    set dataFinal(valor) {
+        this.#dataFinal = valor
+    }
+
     get discricao() {
         return this.#discricao
     }
 
     set discricao(valor) {
         this.#discricao = valor
+    }
+
+    // idValor do lançamento recorrente que originou este (null = lançamento normal/template)
+    get idOrigem() {
+        return this.#idOrigem
+    }
+
+    set idOrigem(valor) {
+        this.#idOrigem = valor
     }
 
     toJSON() {
@@ -113,7 +137,9 @@ class Valor {
             recorValor: this.#recorValor,
             receitaDespesa: this.#receitaDespesa,
             dataEntrada: this.#dataEntrada,
-            discricao: this.#discricao
+            dataFinal: this.#dataFinal,
+            discricao: this.#discricao,
+            idOrigem: this.#idOrigem
         }
     }
 }

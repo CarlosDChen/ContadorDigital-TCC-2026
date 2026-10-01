@@ -42,6 +42,59 @@
         <tbody></tbody>
       </table>
     </div>
+
+    <div class="card-grafico">
+      <h2>Receita por Categoria</h2>
+      <div class="grafico-corpo">
+        <svg id="grafico_pizza_receita" viewBox="0 0 200 200" role="img" aria-label="Receita por categoria no mês selecionado"></svg>
+        <ul id="legenda_pizza_receita" class="legenda-grafico"></ul>
+      </div>
+      <table id="tabela_pizza_receita" class="tabela-dados-grafico">
+        <caption class="sr-only">Receita por categoria no mês selecionado</caption>
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th>Valor</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card-grafico card-grafico-largo">
+      <h2>Evolução da Renda</h2>
+      <svg id="grafico_linha_renda" viewBox="0 0 400 220" role="img" aria-label="Evolução da renda mês a mês"></svg>
+      <table id="tabela_linha_renda" class="tabela-dados-grafico">
+        <caption class="sr-only">Evolução da renda mês a mês</caption>
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th>Renda</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card-grafico card-grafico-largo">
+      <h2>Categorias x Gastos Mensais</h2>
+      <svg id="grafico_barras_categorias" viewBox="0 0 400 220" role="img" aria-label="Comparação das 3 principais categorias de gasto por mês"></svg>
+      <ul id="legenda_barras_categorias" class="legenda-grafico legenda-horizontal"></ul>
+      <table id="tabela_barras_categorias" class="tabela-dados-grafico">
+        <caption class="sr-only">Comparação das 3 principais categorias de gasto por mês</caption>
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th id="cabecalho_barra_1"></th>
+            <th id="cabecalho_barra_2"></th>
+            <th id="cabecalho_barra_3"></th>
+            <th>Outros</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 
   <div id="tooltip_grafico" class="tooltip-grafico"></div>
