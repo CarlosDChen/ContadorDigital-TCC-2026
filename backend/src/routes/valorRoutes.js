@@ -2,27 +2,24 @@ const express = require('express')
 const router = express.Router()
 
 const {
-    listarValores,
     listarValoresPorUsuario,
-    fechamentoMensal,
     criarValor,
     buscarValorPorId,
     atualizarValor,
     deletarValor
 } = require('../controllers/valorController')
 
-router.get('/valores', listarValores)
+const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticacao')
 
-router.get('/valores/usuario/:idUsuario', listarValoresPorUsuario)
+// Todas exigem o token da sessao; cada usuario so enxerga e altera os proprios lançamentos
+router.get('/valores/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarValoresPorUsuario)
 
-router.get('/valores/usuario/:idUsuario/fechamento', fechamentoMensal)
+router.post('/valores', autenticar, criarValor)
 
-router.post('/valores', criarValor)
+router.get('/valores/id/:id', autenticar, buscarValorPorId)
 
-router.get('/valores/id/:id', buscarValorPorId)
+router.put('/valores/id/:id', autenticar, atualizarValor)
 
-router.put('/valores/id/:id', atualizarValor)
-
-router.delete('/valores/id/:id', deletarValor)
+router.delete('/valores/id/:id', autenticar, deletarValor)
 
 module.exports = router

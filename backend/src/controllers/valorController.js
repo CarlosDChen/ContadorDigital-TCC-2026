@@ -1,6 +1,5 @@
 const pool = require('../config/db')
 const Valor = require('../models/valorModel')
-const { calcularFechamentoMensal } = require('../utils/fechamentoUtils')
 
 const linhaParaValor = (linha) => new Valor(
   linha.idvalor,
@@ -13,18 +12,13 @@ const linhaParaValor = (linha) => new Valor(
   linha.dataentra,
   linha.datafinal,
   linha.discri,
-  linha.idorigem,
-  linha.jurosvalor
+  linha.idorigem
 )
 
-const listarValores = async (req, res) => {
-  const resultado = await pool.query('select * from valores order by idvalor')
-
-  res.status(200).json(resultado.rows.map(linhaParaValor))
-}
-
+// Em todas as funcoes, o usuario vem do token da sessao (req.idUsuario) e toda
+// consulta filtra por ele: ninguem le ou altera lançamento de outra pessoa
 const listarValoresPorUsuario = async (req, res) => {
-  const idUsuario = Number(req.params.idUsuario)
+  const idUsuario = req.idUsuario
 
   const resultado = await pool.query(
     'select * from valores where idusuario = $1 order by dataentra desc, idvalor desc',
@@ -34,32 +28,9 @@ const listarValoresPorUsuario = async (req, res) => {
   res.status(200).json(resultado.rows.map(linhaParaValor))
 }
 
-// Fechamento do mes atual (RD-04): saldo do mes e, se estiver no vermelho,
-// quais faturas deixar para o proximo mes (as de juros mais baixo primeiro)
-const fechamentoMensal = async (req, res) => {
-  const idUsuario = Number(req.params.idUsuario)
-  const hoje = new Date()
-  const anoMes = hoje.getFullYear() + String(hoje.getMonth() + 1).padStart(2, '0')
-
-  const resultado = await pool.query(
-    'select * from valores where idusuario = $1 and dataentra like $2',
-    [idUsuario, anoMes + '%']
-  )
-
-  res.status(200).json({
-    anoMes,
-    ...calcularFechamentoMensal(resultado.rows.map(linhaParaValor), hoje)
-  })
-}
-
 const criarValor = async (req, res) => {
   const dadosValor = req.body
-
-  if (!dadosValor.idUsuario) {
-    return res.status(400).json({
-      erro: 'O idUsuario e obrigatorio'
-    })
-  }
+  const idUsuario = req.idUsuario
 
   if (!dadosValor.nomeValor) {
     return res.status(400).json({
@@ -80,28 +51,10 @@ const criarValor = async (req, res) => {
     })
   }
 
-  // Juros por atraso e opcional (so faturas/parcelamentos tem), e so faz sentido em despesa
-  const temJuros = dadosValor.jurosValor !== undefined && dadosValor.jurosValor !== null
-
-  if (temJuros) {
-    if (dadosValor.receitaDespesa !== 0) {
-      return res.status(400).json({
-        erro: 'Juros por atraso so pode ser informado em despesas'
-      })
-    }
-
-    const juros = Number(dadosValor.jurosValor)
-
-    if (Number.isNaN(juros) || juros < 0 || juros > 999.99) {
-      return res.status(400).json({
-        erro: 'Os juros por atraso devem ser um percentual entre 0 e 999,99'
-      })
-    }
-  }
-
+  // A categoria tem que existir E ser do proprio usuario
   const resultadoCategoria = await pool.query(
-    'select tipocatego from categoria where idcatego = $1',
-    [dadosValor.idCategoria]
+    'select tipocatego from categoria where idcatego = $1 and idusuario = $2',
+    [dadosValor.idCategoria, idUsuario]
   )
 
   if (resultadoCategoria.rows.length === 0) {
@@ -122,7 +75,7 @@ const criarValor = async (req, res) => {
        where idusuario = $1 and idcatego = $2 and nomevalor = $3
          and valorvalor = $4 and rescdespes = $5 and dataentra = $6`,
       [
-        dadosValor.idUsuario,
+        idUsuario,
         dadosValor.idCategoria,
         dadosValor.nomeValor,
         dadosValor.valorValor,
@@ -141,11 +94,11 @@ const criarValor = async (req, res) => {
 
   try {
     const resultado = await pool.query(
-      `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, jurosvalor)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        returning *`,
       [
-        dadosValor.idUsuario,
+        idUsuario,
         dadosValor.idCategoria,
         dadosValor.nomeValor,
         dadosValor.valorValor,
@@ -153,8 +106,7 @@ const criarValor = async (req, res) => {
         dadosValor.receitaDespesa,
         dadosValor.dataEntrada,
         dadosValor.dataFinal,
-        dadosValor.discricao,
-        temJuros ? Number(dadosValor.jurosValor) : null
+        dadosValor.discricao
       ]
     )
 
@@ -172,10 +124,14 @@ const criarValor = async (req, res) => {
   }
 }
 
+// Lançamento de outro usuario responde 404 (como se nao existisse), sem revelar que existe
 const buscarValorPorId = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultado = await pool.query('select * from valores where idvalor = $1', [id])
+  const resultado = await pool.query(
+    'select * from valores where idvalor = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultado.rows.length === 0) {
     return res.status(404).json({
@@ -189,7 +145,10 @@ const buscarValorPorId = async (req, res) => {
 const atualizarValor = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultadoBusca = await pool.query('select * from valores where idvalor = $1', [id])
+  const resultadoBusca = await pool.query(
+    'select * from valores where idvalor = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultadoBusca.rows.length === 0) {
     return res.status(404).json({
@@ -214,7 +173,10 @@ const atualizarValor = async (req, res) => {
 const deletarValor = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultado = await pool.query('delete from valores where idvalor = $1', [id])
+  const resultado = await pool.query(
+    'delete from valores where idvalor = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultado.rowCount === 0) {
     return res.status(404).json({
@@ -228,9 +190,7 @@ const deletarValor = async (req, res) => {
 }
 
 module.exports = {
-  listarValores,
   listarValoresPorUsuario,
-  fechamentoMensal,
   criarValor,
   buscarValorPorId,
   atualizarValor,

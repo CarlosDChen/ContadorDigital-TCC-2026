@@ -2,7 +2,6 @@ const express = require('express')
 const router = express.Router()
 
 const {
-    listarCategorias,
     listarCategoriasPorUsuario,
     criarCategoria,
     buscarCategoriaPorId,
@@ -10,16 +9,17 @@ const {
     deletarCategoria
 } = require('../controllers/categoriaController')
 
-router.get('/categorias', listarCategorias)
+const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticacao')
 
-router.get('/categorias/usuario/:idUsuario', listarCategoriasPorUsuario)
+// Todas exigem o token da sessao; cada usuario so enxerga e altera as proprias categorias
+router.get('/categorias/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarCategoriasPorUsuario)
 
-router.post('/categorias', criarCategoria) 
+router.post('/categorias', autenticar, criarCategoria)
 
-router.get('/categorias/id/:id', buscarCategoriaPorId)
+router.get('/categorias/id/:id', autenticar, buscarCategoriaPorId)
 
-router.put('/categorias/id/:id', atualizarCategoria)
+router.put('/categorias/id/:id', autenticar, atualizarCategoria)
 
-router.delete('/categorias/id/:id', deletarCategoria)
+router.delete('/categorias/id/:id', autenticar, deletarCategoria)
 
 module.exports = router

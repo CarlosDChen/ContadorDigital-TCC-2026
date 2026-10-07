@@ -3,9 +3,8 @@ const router = express.Router()
 
 
 //Equivale a const usuarioController = require('../controllers/usuarioController')
-//const listarUsuarios = usuarioController.listarUsuarios
+//const buscarUsuarioPorId = usuarioController.buscarUsuarioPorId
 const {
-  listarUsuarios,
   criarUsuario,
   buscarUsuarioPorId,
   atualizarUsuario,
@@ -14,18 +13,20 @@ const {
   verificarCodigo2FA
 } = require('../controllers/usuarioController')
 
-router.get('/usuarios', listarUsuarios)
+const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticacao')
 
+// Rotas publicas: cadastro e as duas etapas do login
 router.post('/usuarios', criarUsuario)
 
 router.post('/login', loginUsuario)
 
 router.post('/login/verificar-codigo', verificarCodigo2FA)
 
-router.get('/usuarios/id/:id', buscarUsuarioPorId)
+// Rotas protegidas: exigem o token da sessao, e so o proprio usuario acessa a propria conta
+router.get('/usuarios/id/:idUsuario', autenticar, exigirProprioUsuario, buscarUsuarioPorId)
 
-router.put('/usuarios/id/:id', atualizarUsuario)
+router.put('/usuarios/id/:idUsuario', autenticar, exigirProprioUsuario, atualizarUsuario)
 
-router.delete('/usuarios/id/:id', deletarUsuario)
+router.delete('/usuarios/id/:idUsuario', autenticar, exigirProprioUsuario, deletarUsuario)
 
 module.exports = router

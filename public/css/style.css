@@ -662,16 +662,6 @@
       padding: 0;
     }
 
-    .campo-juros {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .campo-juros[hidden] {
-      display: none;
-    }
-
     .datagrid {
       width: 100%;
       border-collapse: collapse;
@@ -746,32 +736,5 @@
 
     .saldo-negativo {
       color: #ef4444;
-      font-weight: 600;
-    }
-
-    .aviso-fechamento {
-      background: var(--fundo-card);
-      border-radius: 8px;
-      border-left: 4px solid #ef4444;
-      padding: 24px;
-      max-width: 940px;
-      margin: 0 auto 40px;
-      box-shadow: 0 2px 8px var(--sombra);
-    }
-
-    .aviso-fechamento h2 {
-      margin-bottom: 12px;
-      font-size: 1.2rem;
-      color: var(--texto-titulo);
-    }
-
-    .aviso-fechamento p {
-      color: var(--texto-paragrafo);
-      line-height: 1.5;
-    }
-
-    .aviso-fechamento .resumo-fechamento {
-      margin-top: 16px;
-      color: var(--texto-titulo);
       font-weight: 600;
     }

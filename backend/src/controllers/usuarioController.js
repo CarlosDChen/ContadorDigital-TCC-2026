@@ -2,10 +2,15 @@ const pool = require('../config/db')
 const Usuario = require('../models/usuarioModel')
 const { encrypt, decrypt, hashCpf } = require('../utils/cryptoUtils')
 const { enviarCodigo2FA } = require('../utils/emailUtils')
+const { gerarToken } = require('../middlewares/autenticacao')
 
-// Codigos de 2FA pendentes de confirmacao, em memoria: idUsuario -> { codigo, expiraEm }
+// Codigos de 2FA pendentes de confirmacao, em memoria: idUsuario -> { codigo, expiraEm, tentativas }
 const codigos2FA = new Map()
 const VALIDADE_CODIGO_MS = 5 * 60 * 1000
+
+// Depois de tantos erros o codigo e descartado, pra ninguem conseguir testar
+// os 900 mil codigos possiveis dentro dos 5 minutos de validade
+const MAXIMO_TENTATIVAS_2FA = 5
 
 // Converte uma linha do banco (campos criptografados) num Usuario
 // com os valores em claro, sempre passando pelo constructor/setters da classe
@@ -24,16 +29,6 @@ const usuarioParaResposta = (usuario) => {
   const dados = usuario.toJSON()
   delete dados.senhaUso
   return dados
-}
-
-const listarUsuarios = async (req, res) => {
-  const resultado = await pool.query('select * from usuario order by idusuario')
-
-  const usuarios = resultado.rows
-    .map(linhaParaUsuario)
-    .map(usuarioParaResposta)
-
-  res.status(200).json(usuarios)
 }
 
 const criarUsuario = async (req, res) => {
@@ -141,8 +136,9 @@ const criarUsuario = async (req, res) => {
   }
 }
 
+// O id vem do token da sessao (as rotas ja garantem que e o mesmo da URL)
 const buscarUsuarioPorId = async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.idUsuario
 
   const resultado = await pool.query('select * from usuario where idusuario = $1', [id])
 
@@ -158,7 +154,7 @@ const buscarUsuarioPorId = async (req, res) => {
 }
 
 const atualizarUsuario = async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.idUsuario
 
   const resultadoBusca = await pool.query('select * from usuario where idusuario = $1', [id])
 
@@ -210,9 +206,10 @@ const loginUsuario = async (req, res) => {
 
   const codigo = String(Math.floor(100000 + Math.random() * 900000))
 
-  codigos2FA.set(usuarioEncontrado.idUsuario, {
+  codigos2FA.set(Number(usuarioEncontrado.idUsuario), {
     codigo,
-    expiraEm: Date.now() + VALIDADE_CODIGO_MS
+    expiraEm: Date.now() + VALIDADE_CODIGO_MS,
+    tentativas: 0
   })
 
   await enviarCodigo2FA(usuarioEncontrado.email, codigo)
@@ -224,9 +221,10 @@ const loginUsuario = async (req, res) => {
   })
 }
 
-// Etapa 2 do login: confirma o codigo de 2FA e libera a sessao
+// Etapa 2 do login: confirma o codigo de 2FA e libera a sessao (devolve o token)
 const verificarCodigo2FA = async (req, res) => {
-  const { idUsuario, codigo } = req.body
+  const { codigo } = req.body
+  const idUsuario = Number(req.body.idUsuario)
 
   if (!idUsuario || !codigo) {
     return res.status(400).json({
@@ -244,6 +242,15 @@ const verificarCodigo2FA = async (req, res) => {
   }
 
   if (pendente.codigo !== String(codigo)) {
+    pendente.tentativas++
+
+    if (pendente.tentativas >= MAXIMO_TENTATIVAS_2FA) {
+      codigos2FA.delete(idUsuario)
+      return res.status(401).json({
+        erro: 'Muitas tentativas erradas. Faca login novamente para receber um novo codigo.'
+      })
+    }
+
     return res.status(401).json({
       erro: 'Codigo invalido'
     })
@@ -263,12 +270,13 @@ const verificarCodigo2FA = async (req, res) => {
 
   res.status(200).json({
     mensagem: 'Login realizado com sucesso',
-    usuario: usuarioParaResposta(usuarioEncontrado)
+    usuario: usuarioParaResposta(usuarioEncontrado),
+    token: gerarToken(usuarioEncontrado.idUsuario)
   })
 }
 
 const deletarUsuario = async (req, res) => {
-  const id = Number(req.params.id)
+  const id = req.idUsuario
 
   const resultado = await pool.query('delete from usuario where idusuario = $1', [id])
 
@@ -284,7 +292,6 @@ const deletarUsuario = async (req, res) => {
 }
 
 module.exports = {
-  listarUsuarios,
   criarUsuario,
   buscarUsuarioPorId,
   atualizarUsuario,

@@ -11,14 +11,10 @@ const linhaParaCategoria = (linha) => new Categoria(
   linha.idtemplate
 )
 
-const listarCategorias = async (req, res) => {
-  const resultado = await pool.query('select * from categoria order by idcatego')
-
-  res.status(200).json(resultado.rows.map(linhaParaCategoria))
-}
-
+// Em todas as funcoes, o usuario vem do token da sessao (req.idUsuario) e toda
+// consulta filtra por ele: ninguem le ou altera categoria de outra pessoa
 const listarCategoriasPorUsuario = async (req, res) => {
-  const idUsuario = Number(req.params.idUsuario)
+  const idUsuario = req.idUsuario
 
   const resultado = await pool.query(
     'select * from categoria where idusuario = $1 order by idcatego',
@@ -30,12 +26,6 @@ const listarCategoriasPorUsuario = async (req, res) => {
 
 const criarCategoria = async (req, res) => {
   const dadosCategoria = req.body
-
-  if (!dadosCategoria.idUsuario) {
-    return res.status(400).json({
-      erro: 'O idUsuario e obrigatorio'
-    })
-  }
 
   if (!dadosCategoria.nomeCategoria) {
     return res.status(400).json({
@@ -49,7 +39,7 @@ const criarCategoria = async (req, res) => {
        values ($1, $2, $3, $4, $5)
        returning *`,
       [
-        dadosCategoria.idUsuario,
+        req.idUsuario,
         dadosCategoria.nomeCategoria,
         dadosCategoria.tipoCategoria,
         dadosCategoria.descCategoria,
@@ -71,10 +61,14 @@ const criarCategoria = async (req, res) => {
   }
 }
 
+// Categoria de outro usuario responde 404 (como se nao existisse), sem revelar que existe
 const buscarCategoriaPorId = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultado = await pool.query('select * from categoria where idcatego = $1', [id])
+  const resultado = await pool.query(
+    'select * from categoria where idcatego = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultado.rows.length === 0) {
     return res.status(404).json({
@@ -88,7 +82,10 @@ const buscarCategoriaPorId = async (req, res) => {
 const atualizarCategoria = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultadoBusca = await pool.query('select * from categoria where idcatego = $1', [id])
+  const resultadoBusca = await pool.query(
+    'select * from categoria where idcatego = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultadoBusca.rows.length === 0) {
     return res.status(404).json({
@@ -113,7 +110,10 @@ const atualizarCategoria = async (req, res) => {
 const deletarCategoria = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultado = await pool.query('delete from categoria where idcatego = $1', [id])
+  const resultado = await pool.query(
+    'delete from categoria where idcatego = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultado.rowCount === 0) {
     return res.status(404).json({
@@ -127,7 +127,6 @@ const deletarCategoria = async (req, res) => {
 }
 
 module.exports = {
-  listarCategorias,
   listarCategoriasPorUsuario,
   criarCategoria,
   buscarCategoriaPorId,
