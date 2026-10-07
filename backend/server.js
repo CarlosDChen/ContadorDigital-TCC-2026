@@ -8,6 +8,7 @@ const cron = require('node-cron')
 const usuarioRoutes = require('./src/routes/usuarioRoutes')
 const categoriaRoutes = require('./src/routes/categoriaRoutes')
 const valorRoutes = require('./src/routes/valorRoutes')
+const previsaoRoutes = require('./src/routes/previsaoRoutes')
 const { processarLancamentosRecorrentes } = require('./src/jobs/lancamentosRecorrentes')
 
 const app = express()
@@ -21,6 +22,7 @@ app.use(express.json())
 app.use(usuarioRoutes)
 app.use(categoriaRoutes)
 app.use(valorRoutes)
+app.use(previsaoRoutes)
 
 app.get('/', (req, res) => {
   res.send('Backend funcionando e atualizado')

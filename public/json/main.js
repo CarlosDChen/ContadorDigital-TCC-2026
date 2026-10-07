@@ -1367,3 +1367,63 @@ if (graficoPizzaGastos) {
 
     carregarGraficos();
 }
+
+const tabelaGastosMesCalculadora = document.getElementById("tabela_gastosMesCalculadora");
+if (tabelaGastosMesCalculadora) {
+    const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
+
+    const formatarDataExibicaoCalculadora = (dataEntrada) => {
+        const ano = dataEntrada.slice(0, 4);
+        const mes = dataEntrada.slice(4, 6);
+        const dia = dataEntrada.slice(6, 8);
+        return dia + "/" + mes + "/" + ano;
+    };
+
+    const carregarGastosMesCalculadora = async () => {
+        if (!usuarioLogado) {
+            tabelaGastosMesCalculadora.innerHTML = '<tr><td colspan="4">Faça login para ver seus gastos.</td></tr>';
+            return;
+        }
+
+        const [respostaValores, respostaCategorias] = await Promise.all([
+            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+            fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
+        ]);
+
+        const valores = await respostaValores.json();
+        const categorias = await respostaCategorias.json();
+
+        const nomeCategoria = (idCategoria) => {
+            const categoria = categorias.find((item) => item.idCategoria === idCategoria);
+            return categoria ? categoria.nomeCategoria : "Sem categoria";
+        };
+
+        const hoje = new Date();
+        const anoMesAtual = hoje.getFullYear() + String(hoje.getMonth() + 1).padStart(2, "0");
+
+        const gastosDoMes = valores
+            .filter((valor) => valor.receitaDespesa === 0 && valor.dataEntrada.slice(0, 6) === anoMesAtual)
+            .sort((a, b) => b.dataEntrada.localeCompare(a.dataEntrada));
+
+        tabelaGastosMesCalculadora.innerHTML = "";
+
+        if (gastosDoMes.length === 0) {
+            tabelaGastosMesCalculadora.innerHTML = '<tr><td colspan="4">Nenhum gasto registrado neste mês.</td></tr>';
+            return;
+        }
+
+        gastosDoMes.forEach((valor) => {
+            const linha = document.createElement("tr");
+
+            linha.innerHTML =
+                "<td>" + formatarDataExibicaoCalculadora(valor.dataEntrada) + "</td>" +
+                "<td>" + valor.nomeValor + "</td>" +
+                "<td>" + nomeCategoria(valor.idCategoria) + "</td>" +
+                '<td class="valor-negativo">-R$ ' + Number(valor.valorValor).toFixed(2) + "</td>";
+
+            tabelaGastosMesCalculadora.appendChild(linha);
+        });
+    };
+
+    carregarGastosMesCalculadora();
+}

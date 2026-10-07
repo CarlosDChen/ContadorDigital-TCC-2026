@@ -377,6 +377,31 @@
       padding: 32px 40px;
     }
 
+    .calculadora-grid {
+      padding: 32px 40px;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    .coluna-esquerda {
+      flex: 1;
+      min-width: 280px;
+      padding-right: 24px;
+      border-right: 1px solid var(--borda);
+    }
+
+    .coluna-esquerda h2 {
+      margin-bottom: 12px;
+      font-size: 1.1rem;
+      color: var(--texto-titulo);
+    }
+
+    .coluna-direita {
+      flex: 1;
+      min-width: 280px;
+      padding-left: 24px;
+    }
+
     .sr-only {
       position: absolute;
       width: 1px;
