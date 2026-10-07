@@ -12,17 +12,10 @@ if (btnRelatorios) {
     });
 }
 
-const btnLimitesDeGastos = document.getElementById("btn_limitesDeGastos");
-if (btnLimitesDeGastos) {
-    btnLimitesDeGastos.addEventListener("click", () => {
-        window.location.href = "limitesdegastos.html";
-    });
-}
-
-const btnCalculadoras = document.getElementById("btn_Calculadoras");
-if (btnCalculadoras) {
-    btnCalculadoras.addEventListener("click", () => {
-        window.location.href = "calculadoras.html";
+const btnCalculadoraLimite = document.getElementById("btn_calculadoraLimite");
+if (btnCalculadoraLimite) {
+    btnCalculadoraLimite.addEventListener("click", () => {
+        window.location.href = "calculadoralimite.html";
     });
 }
 
