@@ -569,6 +569,38 @@
       font-size: 0.9rem;
     }
 
+    /* RNF-05.1: termo financeiro com explicacao ao passar o mouse ou focar com o teclado */
+    [data-termo] {
+      cursor: help;
+    }
+
+    .termo {
+      text-decoration: underline dotted;
+      text-underline-offset: 3px;
+    }
+
+    .dica-termo {
+      position: fixed;
+      z-index: 3000;
+      max-width: 260px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--tooltip-fundo);
+      color: var(--tooltip-texto);
+      font-size: 0.8rem;
+      font-weight: 400;
+      line-height: 1.4;
+      pointer-events: none;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+
+    .dica-termo.ativa {
+      visibility: visible;
+      opacity: 1;
+    }
+
     .acoes-lancamentos {
       display: flex;
       gap: 12px;

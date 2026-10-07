@@ -66,6 +66,100 @@ const fetchApi = async (url, opcoes = {}) => {
     return resposta;
 };
 
+// RNF-05.1: explicacao curta dos termos financeiros, mostrada ao passar o mouse
+// (ou focar com o teclado). Pra explicar um termo novo: escreva o texto aqui e
+// marque o texto na pagina com <span class="termo" data-termo="chave">Texto</span>
+const GLOSSARIO = {
+    renda: "Todo o dinheiro que entrou neste mês, como salário, vendas e benefícios.",
+    gastos: "Todo o dinheiro que saiu neste mês, como contas, compras e lazer.",
+    saldo: "Quanto sobrou no mês: a renda menos os gastos. Se ficar negativo, você gastou mais do que ganhou.",
+    tipoLancamento: "Fixo: se repete todo mês, como aluguel ou salário. Variável: acontece uma vez só, como mercado ou uma compra.",
+    fixo: "Se repete todo mês, como aluguel ou salário. O sistema lança sozinho, no mesmo dia de cada mês.",
+    variavel: "Lançado uma vez só, não se repete todo mês. Ex.: mercado, lazer ou uma compra.",
+    importancia: "O quanto esse gasto é essencial pra você. 1 = não dá pra cortar (ex.: aluguel). 5 = dá pra cortar fácil (ex.: lazer).",
+    rendaAtiva: "Dinheiro que você ganha trabalhando, como o salário do seu emprego principal.",
+    rendaAtivaSecundaria: "Dinheiro de um trabalho extra, além do principal, como um bico ou freela.",
+    rendaPassiva: "Dinheiro que entra sem você precisar trabalhar por ele, como um aluguel que você recebe ou o rendimento de um investimento.",
+    gastosPorCategoria: "Mostra em que você gastou no mês escolhido. Cada fatia é uma categoria: quanto maior a fatia, mais dinheiro foi pra ela.",
+    receitaPorCategoria: "Mostra de onde veio o seu dinheiro no mês escolhido. Receita é tudo o que você recebeu.",
+    evolucaoRenda: "Mostra quanto você ganhou em cada mês, pra ver se a sua renda está subindo ou caindo.",
+    categoriasGastosMensais: "Compara, mês a mês, as 3 categorias em que você mais gasta. O resto aparece junto em \"Outros\"."
+};
+
+// Categorias padrão de receita com nome técnico, pelo número do molde (categoria_padrao).
+// Vale mesmo se o usuário renomear a categoria, porque o idTemplate não muda
+const TERMO_POR_CATEGORIA_PADRAO = {
+    12: "rendaAtiva",
+    13: "rendaAtivaSecundaria",
+    14: "rendaPassiva"
+};
+
+const termoDaCategoria = (categoria) => categoria ? TERMO_POR_CATEGORIA_PADRAO[categoria.idTemplate] : undefined;
+
+const dicaTermo = document.createElement("div");
+dicaTermo.id = "dica_termo";
+dicaTermo.className = "dica-termo";
+dicaTermo.setAttribute("role", "tooltip");
+document.body.appendChild(dicaTermo);
+
+// Termos escritos direto no HTML podem receber foco pelo teclado (Tab)
+document.querySelectorAll(".termo[data-termo]").forEach((termo) => {
+    termo.tabIndex = 0;
+});
+
+const mostrarDicaTermo = (elemento) => {
+    const texto = GLOSSARIO[elemento.dataset.termo];
+    if (!texto) return;
+
+    dicaTermo.textContent = texto;
+    elemento.setAttribute("aria-describedby", "dica_termo");
+
+    // Abre embaixo do termo; se não couber na tela, abre em cima
+    const caixa = elemento.getBoundingClientRect();
+    const margem = 8;
+    const esquerda = Math.min(caixa.left, window.innerWidth - dicaTermo.offsetWidth - margem);
+    let topo = caixa.bottom + margem;
+
+    if (topo + dicaTermo.offsetHeight > window.innerHeight - margem) {
+        topo = caixa.top - dicaTermo.offsetHeight - margem;
+    }
+
+    dicaTermo.style.left = Math.max(margem, esquerda) + "px";
+    dicaTermo.style.top = topo + "px";
+    dicaTermo.classList.add("ativa");
+};
+
+const esconderDicaTermo = () => {
+    dicaTermo.classList.remove("ativa");
+};
+
+// Escuta no documento inteiro, assim funciona também nos termos criados depois pelo JS
+// (selos Fixo/Variável da tabela, legendas dos gráficos)
+document.addEventListener("mouseover", (evento) => {
+    const termo = evento.target.closest("[data-termo]");
+    if (termo) mostrarDicaTermo(termo);
+});
+
+document.addEventListener("mouseout", (evento) => {
+    const termo = evento.target.closest("[data-termo]");
+    if (termo && !termo.contains(evento.relatedTarget)) esconderDicaTermo();
+});
+
+document.addEventListener("focusin", (evento) => {
+    const termo = evento.target.closest("[data-termo]");
+    if (termo) mostrarDicaTermo(termo);
+});
+
+document.addEventListener("focusout", esconderDicaTermo);
+
+document.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape") esconderDicaTermo();
+});
+
+// Se a página rolar ou a janela mudar de tamanho, o termo sai do lugar: fecha a explicação
+window.addEventListener("scroll", esconderDicaTermo, true);
+window.addEventListener("resize", esconderDicaTermo);
+
 const btnLogin = document.getElementById("btn_login");
 const overlayLogin = document.getElementById("overlay_login");
 if (btnLogin && overlayLogin) {
@@ -428,18 +522,35 @@ if (tabelaLancamentos) {
             const seloTipo = document.createElement("span");
             seloTipo.className = "badge-tipo " + (fixo ? "badge-fixo" : "badge-variavel");
             seloTipo.textContent = fixo ? "Fixo" : "Variável";
+            seloTipo.dataset.termo = fixo ? "fixo" : "variavel";
 
             // Texto digitado pelo usuario entra sempre via textContent, nunca innerHTML:
             // uma descricao com <img onerror=...> viraria codigo executado na pagina
             [
                 formatarDataExibicao(valor.dataEntrada),
-                valor.nomeValor,
-                nomeCategoria(valor.idCategoria)
+                valor.nomeValor
             ].forEach((texto) => {
                 const celula = document.createElement("td");
                 celula.textContent = texto;
                 linha.appendChild(celula);
             });
+
+            // Categorias de renda com nome técnico (Ativa, Passiva...) ganham explicação
+            const celulaCategoria = document.createElement("td");
+            const termoCategoria = termoDaCategoria(categorias.find((item) => item.idCategoria === valor.idCategoria));
+
+            if (termoCategoria) {
+                const textoCategoria = document.createElement("span");
+                textoCategoria.className = "termo";
+                textoCategoria.dataset.termo = termoCategoria;
+                textoCategoria.tabIndex = 0;
+                textoCategoria.textContent = nomeCategoria(valor.idCategoria);
+                celulaCategoria.appendChild(textoCategoria);
+            } else {
+                celulaCategoria.textContent = nomeCategoria(valor.idCategoria);
+            }
+
+            linha.appendChild(celulaCategoria);
 
             const celulaTipo = document.createElement("td");
             celulaTipo.appendChild(seloTipo);
@@ -824,6 +935,17 @@ if (graficoPizzaGastos) {
 
             const textoLegenda = document.createElement("span");
             textoLegenda.textContent = item.nome + " (" + percentual.toFixed(1) + "%)";
+
+            // Categorias de renda com nome técnico (Ativa, Passiva...) ganham explicação
+            const categoriaComTermo = categoriasCarregadas.find(
+                (categoria) => categoria.nomeCategoria === item.nome && termoDaCategoria(categoria)
+            );
+
+            if (categoriaComTermo) {
+                textoLegenda.className = "termo";
+                textoLegenda.dataset.termo = termoDaCategoria(categoriaComTermo);
+                textoLegenda.tabIndex = 0;
+            }
 
             itemLegenda.appendChild(marcador);
             itemLegenda.appendChild(textoLegenda);
