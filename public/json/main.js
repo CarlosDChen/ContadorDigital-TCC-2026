@@ -26,6 +26,30 @@ if (btnCalculadoras) {
     });
 }
 
+// Modo escuro: o tema inicial ja foi aplicado pelo json/tema.js no <head>,
+// aqui so troca e salva a escolha (vale pra todas as paginas)
+const btnTema = document.getElementById("btn_tema");
+if (btnTema) {
+    const atualizarBotaoTema = () => {
+        const escuro = document.documentElement.dataset.tema === "escuro";
+        const descricao = escuro ? "Ativar modo claro" : "Ativar modo escuro";
+
+        btnTema.textContent = escuro ? "☀️" : "🌙";
+        btnTema.setAttribute("aria-label", descricao);
+        btnTema.title = descricao;
+    };
+
+    btnTema.addEventListener("click", () => {
+        const novoTema = document.documentElement.dataset.tema === "escuro" ? "claro" : "escuro";
+
+        document.documentElement.dataset.tema = novoTema;
+        localStorage.setItem("tema", novoTema);
+        atualizarBotaoTema();
+    });
+
+    atualizarBotaoTema();
+}
+
 const btnLogin = document.getElementById("btn_login");
 const overlayLogin = document.getElementById("overlay_login");
 if (btnLogin && overlayLogin) {
@@ -315,6 +339,8 @@ if (tabelaLancamentos) {
     const inputRecorrente = document.getElementById("input_recorrente");
     const campoDataFinal = document.getElementById("campo_dataFinal");
     const inputDataFinalLancamento = document.getElementById("input_dataFinalLancamento");
+    const campoJuros = document.getElementById("campo_juros");
+    const inputJurosLancamento = document.getElementById("input_jurosLancamento");
 
     inputDataLancamento.addEventListener("input", () => {
         inputDataLancamento.value = aplicarMascaraData(inputDataLancamento.value);
@@ -404,6 +430,7 @@ if (tabelaLancamentos) {
         tituloModalLancamento.textContent = tipo === 1 ? "Adicionar Renda" : "Adicionar Gasto";
         formLancamento.reset();
         campoDataFinal.hidden = true;
+        campoJuros.hidden = tipo !== 0; // juros por atraso so existe em gasto (fatura/parcelamento)
         msgErroLancamento.textContent = "";
         popularSelectCategorias(tipo);
         overlayLancamento.classList.add("active");
@@ -471,7 +498,10 @@ if (tabelaLancamentos) {
             receitaDespesa: tipoLancamentoAtual,
             dataEntrada: dataEntrada,
             dataFinal: dataFinal,
-            discricao: ""
+            discricao: "",
+            jurosValor: tipoLancamentoAtual === 0 && inputJurosLancamento.value !== ""
+                ? Number(inputJurosLancamento.value)
+                : null
         };
 
         try {
@@ -611,7 +641,76 @@ if (rendaEl) {
         saldoEl.classList.add(saldo > 0 ? "saldo-positivo" : "saldo-negativo");
     };
 
+    const avisoFechamento = document.getElementById("aviso_fechamento");
+
+    // Nos ultimos dias do mes, se o saldo estiver negativo, recomenda quais faturas
+    // deixar para o proximo mes (as de juros mais baixo primeiro, calculado no backend)
+    const carregarAvisoFechamento = async () => {
+        if (!usuarioLogado) return;
+
+        const resposta = await fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario + "/fechamento");
+        const fechamento = await resposta.json();
+
+        if (!fechamento.emFechamento || !fechamento.noVermelho) return;
+
+        const textoFechamento = document.getElementById("texto_fechamento");
+        const tabelaFechamento = document.getElementById("tabela_fechamento");
+        const corpoTabelaFechamento = tabelaFechamento.querySelector("tbody");
+        const resumoFechamento = document.getElementById("resumo_fechamento");
+        const recomendacoes = fechamento.recomendacoes;
+        const plural = recomendacoes.length > 1;
+
+        const prazo = fechamento.diasParaFechar === 0
+            ? "Hoje é o último dia do mês"
+            : "Faltam " + fechamento.diasParaFechar + (fechamento.diasParaFechar === 1 ? " dia" : " dias") + " para o mês fechar";
+
+        textoFechamento.textContent = prazo + " e seus gastos passam a renda em R$ " + Math.abs(fechamento.saldo).toFixed(2) + ". ";
+
+        if (recomendacoes.length === 0) {
+            textoFechamento.textContent += "Nenhum gasto deste mês tem juros por atraso cadastrado. Informe a taxa ao lançar faturas e parcelamentos para receber uma recomendação do que deixar para o próximo mês.";
+        } else {
+            textoFechamento.textContent += "Para não fechar no vermelho, a recomendação é deixar para o próximo mês " +
+                (plural ? "as faturas" : "a fatura") + " com os juros mais baixos:";
+        }
+
+        corpoTabelaFechamento.innerHTML = "";
+
+        recomendacoes.forEach((fatura) => {
+            const linha = document.createElement("tr");
+
+            [
+                fatura.nomeValor,
+                "R$ " + fatura.valorValor.toFixed(2),
+                fatura.jurosValor.toFixed(2) + "%",
+                "R$ " + fatura.jurosEstimado.toFixed(2)
+            ].forEach((texto) => {
+                const celula = document.createElement("td");
+                celula.textContent = texto;
+                linha.appendChild(celula);
+            });
+
+            corpoTabelaFechamento.appendChild(linha);
+        });
+
+        tabelaFechamento.hidden = recomendacoes.length === 0;
+
+        if (recomendacoes.length === 0) {
+            resumoFechamento.textContent = "";
+        } else if (fechamento.saldoAposAdiar >= 0) {
+            resumoFechamento.textContent = "Adiando " + (plural ? "essas faturas" : "essa fatura") +
+                ", você paga cerca de R$ " + fechamento.jurosEstimados.toFixed(2) +
+                " de juros no próximo mês e fecha este mês com saldo de R$ " + fechamento.saldoAposAdiar.toFixed(2) + ".";
+        } else {
+            resumoFechamento.textContent = "Mesmo adiando todas as faturas com juros cadastrados, o mês ainda fecha negativo em R$ " +
+                Math.abs(fechamento.saldoAposAdiar).toFixed(2) + ". Adiá-las custaria cerca de R$ " +
+                fechamento.jurosEstimados.toFixed(2) + " de juros no próximo mês.";
+        }
+
+        avisoFechamento.hidden = false;
+    };
+
     carregarResumoMensal();
+    carregarAvisoFechamento();
 }
 
 const graficoPizzaGastos = document.getElementById("grafico_pizza_gastos");
@@ -644,11 +743,16 @@ if (graficoPizzaGastos) {
         "Jul", "Ago", "Set", "Out", "Nov", "Dez"
     ];
 
-    // Ordem fixa da paleta categórica (nunca ciclada arbitrariamente)
+    // Ordem fixa da paleta categórica (nunca ciclada arbitrariamente).
+    // Os valores ficam no style.css (--serie-1 a --serie-8), com versão clara e escura,
+    // então os gráficos trocam de cor junto com o tema sem precisar redesenhar
     const PALETA_CATEGORICA = [
-        "#2a78d6", "#eb6834", "#1baf7a", "#eda100",
-        "#e87ba4", "#008300", "#4a3aa7", "#e34948"
+        "var(--serie-1)", "var(--serie-2)", "var(--serie-3)", "var(--serie-4)",
+        "var(--serie-5)", "var(--serie-6)", "var(--serie-7)", "var(--serie-8)"
     ];
+
+    // Contorno que separa fatias/pontos: a cor do próprio card, em qualquer tema
+    const COR_SUPERFICIE = "var(--fundo-card)";
 
     const COR_RENDA = "#22c55e";
     const COR_OUTROS = "#9ca3af";
@@ -739,8 +843,8 @@ if (graficoPizzaGastos) {
 
             const path = document.createElementNS(svgNS, "path");
             path.setAttribute("d", criarFatiaSvg(100, 100, 90, anguloAtual, anguloFinal));
-            path.setAttribute("fill", cor);
-            path.setAttribute("stroke", "#ffffff");
+            path.style.fill = cor;
+            path.style.stroke = COR_SUPERFICIE;
             path.setAttribute("stroke-width", "2");
             path.setAttribute("stroke-linejoin", "round");
             path.classList.add("fatia-grafico");
@@ -882,7 +986,7 @@ if (graficoPizzaGastos) {
             pontoVisivel.setAttribute("cy", String(y));
             pontoVisivel.setAttribute("r", "4");
             pontoVisivel.setAttribute("fill", COR_RENDA);
-            pontoVisivel.setAttribute("stroke", "#ffffff");
+            pontoVisivel.style.stroke = COR_SUPERFICIE;
             pontoVisivel.setAttribute("stroke-width", "2");
 
             const aoInteragir = (evento) => mostrarTooltip(evento, [formatarMoeda(ponto.valor), rotuloMesCompleto]);
@@ -1015,7 +1119,7 @@ if (graficoPizzaGastos) {
                     barra.setAttribute("y", String(y));
                     barra.setAttribute("width", String(larguraBarra * 0.85));
                     barra.setAttribute("height", String(altura));
-                    barra.setAttribute("fill", cores[indiceSerie]);
+                    barra.style.fill = cores[indiceSerie];
                     barra.classList.add("barra-grafico");
                     barra.tabIndex = 0;
 

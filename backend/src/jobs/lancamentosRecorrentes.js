@@ -41,8 +41,8 @@ const processarLancamentosRecorrentes = async () => {
         }
 
         await pool.query(
-            `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, idorigem)
-             values ($1, $2, $3, $4, 0, $5, $6, null, $7, $8)`,
+            `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, idorigem, jurosvalor)
+             values ($1, $2, $3, $4, 0, $5, $6, null, $7, $8, $9)`,
             [
                 template.idusuario,
                 template.idcatego,
@@ -51,7 +51,8 @@ const processarLancamentosRecorrentes = async () => {
                 template.rescdespes,
                 hoje,
                 template.discri,
-                template.idvalor
+                template.idvalor,
+                template.jurosvalor
             ]
         )
 

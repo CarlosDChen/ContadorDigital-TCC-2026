@@ -10,6 +10,7 @@ class Valor {
     #dataFinal
     #discricao
     #idOrigem
+    #jurosValor
 
     constructor(
         idValor,
@@ -22,7 +23,8 @@ class Valor {
         dataEntrada,
         dataFinal,
         discricao,
-        idOrigem
+        idOrigem,
+        jurosValor
     ) {
         this.#idValor = idValor
         this.#idUsuario = idUsuario
@@ -35,6 +37,7 @@ class Valor {
         this.#dataFinal = dataFinal
         this.#discricao = discricao
         this.#idOrigem = idOrigem
+        this.#jurosValor = jurosValor
     }
 
     get idValor() {
@@ -127,6 +130,16 @@ class Valor {
         this.#idOrigem = valor
     }
 
+    // Juros por atraso em % ao mes, informado pelo usuario em faturas/parcelamentos
+    // (null = gasto comum, que nao entra na recomendacao de adiamento)
+    get jurosValor() {
+        return this.#jurosValor
+    }
+
+    set jurosValor(valor) {
+        this.#jurosValor = valor
+    }
+
     toJSON() {
         return {
             idValor: this.#idValor,
@@ -139,7 +152,8 @@ class Valor {
             dataEntrada: this.#dataEntrada,
             dataFinal: this.#dataFinal,
             discricao: this.#discricao,
-            idOrigem: this.#idOrigem
+            idOrigem: this.#idOrigem,
+            jurosValor: this.#jurosValor
         }
     }
 }

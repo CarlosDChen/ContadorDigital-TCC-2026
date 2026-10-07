@@ -4,6 +4,7 @@ const router = express.Router()
 const {
     listarValores,
     listarValoresPorUsuario,
+    fechamentoMensal,
     criarValor,
     buscarValorPorId,
     atualizarValor,
@@ -13,6 +14,8 @@ const {
 router.get('/valores', listarValores)
 
 router.get('/valores/usuario/:idUsuario', listarValoresPorUsuario)
+
+router.get('/valores/usuario/:idUsuario/fechamento', fechamentoMensal)
 
 router.post('/valores', criarValor)
 
