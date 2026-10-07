@@ -6,8 +6,11 @@ const {
     criarPrevisao
 } = require('../controllers/previsaoController')
 
-router.get('/previsoes/usuario/:idUsuario', listarPrevisoesPorUsuario)
+const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticacao')
 
-router.post('/previsoes', criarPrevisao)
+// Todas exigem o token da sessao; cada usuario so enxerga e cria as proprias previsoes
+router.get('/previsoes/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarPrevisoesPorUsuario)
+
+router.post('/previsoes', autenticar, criarPrevisao)
 
 module.exports = router

@@ -19,6 +19,53 @@ if (btnCalculadoraLimite) {
     });
 }
 
+// Modo escuro: o tema inicial ja foi aplicado pelo json/tema.js no <head>,
+// aqui so troca e salva a escolha (vale pra todas as paginas)
+const btnTema = document.getElementById("btn_tema");
+if (btnTema) {
+    const atualizarBotaoTema = () => {
+        const escuro = document.documentElement.dataset.tema === "escuro";
+        const descricao = escuro ? "Ativar modo claro" : "Ativar modo escuro";
+
+        btnTema.textContent = escuro ? "☀️" : "🌙";
+        btnTema.setAttribute("aria-label", descricao);
+        btnTema.title = descricao;
+    };
+
+    btnTema.addEventListener("click", () => {
+        const novoTema = document.documentElement.dataset.tema === "escuro" ? "claro" : "escuro";
+
+        document.documentElement.dataset.tema = novoTema;
+        localStorage.setItem("tema", novoTema);
+        atualizarBotaoTema();
+    });
+
+    atualizarBotaoTema();
+}
+
+// Chamadas ao backend que exigem login: manda o token da sessao (recebido no 2FA)
+// no cabeçalho. Se a sessao expirou ou e invalida (401), limpa o login e volta
+// pra tela inicial. Cadastro e login continuam usando o fetch normal
+const fetchApi = async (url, opcoes = {}) => {
+    const sessao = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
+
+    const resposta = await fetch(url, {
+        ...opcoes,
+        headers: {
+            ...opcoes.headers,
+            Authorization: "Bearer " + (sessao && sessao.token ? sessao.token : "")
+        }
+    });
+
+    if (resposta.status === 401) {
+        localStorage.removeItem("usuarioLogado");
+        window.location.href = "landingPage.html";
+        return new Promise(() => {}); // nao continua o fluxo enquanto a pagina troca
+    }
+
+    return resposta;
+};
+
 const btnLogin = document.getElementById("btn_login");
 const overlayLogin = document.getElementById("overlay_login");
 if (btnLogin && overlayLogin) {
@@ -114,7 +161,8 @@ if (btnLogin && overlayLogin) {
 
             localStorage.setItem("usuarioLogado", JSON.stringify({
                 idUsuario: dados.usuario.idUsuario,
-                nomeUso: dados.usuario.nomeUso
+                nomeUso: dados.usuario.nomeUso,
+                token: dados.token
             }));
 
             window.location.href = "index.html";
@@ -342,7 +390,7 @@ if (tabelaLancamentos) {
     const carregarCategorias = async () => {
         if (!usuarioLogado) return;
 
-        const resposta = await fetch("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario);
+        const resposta = await fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario);
         categorias = await resposta.json();
     };
 
@@ -365,7 +413,7 @@ if (tabelaLancamentos) {
             return;
         }
 
-        const resposta = await fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario);
+        const resposta = await fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario);
         const valores = await resposta.json();
 
         tabelaLancamentos.innerHTML = "";
@@ -377,16 +425,30 @@ if (tabelaLancamentos) {
 
             // Fixo: e o proprio lançamento recorrente OU foi gerado a partir de um (RD-03/RD-09)
             const fixo = valor.recorValor === 1 || valor.idOrigem !== null;
-            const seloTipo = fixo
-                ? '<span class="badge-tipo badge-fixo">Fixo</span>'
-                : '<span class="badge-tipo badge-variavel">Variável</span>';
+            const seloTipo = document.createElement("span");
+            seloTipo.className = "badge-tipo " + (fixo ? "badge-fixo" : "badge-variavel");
+            seloTipo.textContent = fixo ? "Fixo" : "Variável";
 
-            linha.innerHTML =
-                "<td>" + formatarDataExibicao(valor.dataEntrada) + "</td>" +
-                "<td>" + valor.nomeValor + "</td>" +
-                "<td>" + nomeCategoria(valor.idCategoria) + "</td>" +
-                "<td>" + seloTipo + "</td>" +
-                '<td class="' + (positivo ? "valor-positivo" : "valor-negativo") + '">' + valorFormatado + "</td>";
+            // Texto digitado pelo usuario entra sempre via textContent, nunca innerHTML:
+            // uma descricao com <img onerror=...> viraria codigo executado na pagina
+            [
+                formatarDataExibicao(valor.dataEntrada),
+                valor.nomeValor,
+                nomeCategoria(valor.idCategoria)
+            ].forEach((texto) => {
+                const celula = document.createElement("td");
+                celula.textContent = texto;
+                linha.appendChild(celula);
+            });
+
+            const celulaTipo = document.createElement("td");
+            celulaTipo.appendChild(seloTipo);
+            linha.appendChild(celulaTipo);
+
+            const celulaValor = document.createElement("td");
+            celulaValor.className = positivo ? "valor-positivo" : "valor-negativo";
+            celulaValor.textContent = valorFormatado;
+            linha.appendChild(celulaValor);
 
             tabelaLancamentos.appendChild(linha);
         });
@@ -455,8 +517,8 @@ if (tabelaLancamentos) {
             }
         }
 
+        // O usuario nao vai no corpo: o backend pega do token da sessao
         const dadosLancamento = {
-            idUsuario: usuarioLogado.idUsuario,
             idCategoria: Number(idCategoria),
             nomeValor: descricao,
             valorValor: valor,
@@ -468,7 +530,7 @@ if (tabelaLancamentos) {
         };
 
         try {
-            let resposta = await fetch("http://localhost:3000/valores", {
+            let resposta = await fetchApi("http://localhost:3000/valores", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(dadosLancamento)
@@ -483,7 +545,7 @@ if (tabelaLancamentos) {
                     return;
                 }
 
-                resposta = await fetch("http://localhost:3000/valores", {
+                resposta = await fetchApi("http://localhost:3000/valores", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ ...dadosLancamento, confirmarDuplicado: true })
@@ -534,11 +596,10 @@ if (tabelaLancamentos) {
         const importancia = document.getElementById("input_importanciaCategoria").value;
 
         try {
-            const resposta = await fetch("http://localhost:3000/categorias", {
+            const resposta = await fetchApi("http://localhost:3000/categorias", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    idUsuario: usuarioLogado.idUsuario,
                     nomeCategoria: nome,
                     tipoCategoria: Number(tipo),
                     importanciaCategoria: Number(importancia)
@@ -579,7 +640,7 @@ if (rendaEl) {
             return;
         }
 
-        const resposta = await fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario);
+        const resposta = await fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario);
         const valores = await resposta.json();
 
         const hoje = new Date();
@@ -637,11 +698,16 @@ if (graficoPizzaGastos) {
         "Jul", "Ago", "Set", "Out", "Nov", "Dez"
     ];
 
-    // Ordem fixa da paleta categórica (nunca ciclada arbitrariamente)
+    // Ordem fixa da paleta categórica (nunca ciclada arbitrariamente).
+    // Os valores ficam no style.css (--serie-1 a --serie-8), com versão clara e escura,
+    // então os gráficos trocam de cor junto com o tema sem precisar redesenhar
     const PALETA_CATEGORICA = [
-        "#2a78d6", "#eb6834", "#1baf7a", "#eda100",
-        "#e87ba4", "#008300", "#4a3aa7", "#e34948"
+        "var(--serie-1)", "var(--serie-2)", "var(--serie-3)", "var(--serie-4)",
+        "var(--serie-5)", "var(--serie-6)", "var(--serie-7)", "var(--serie-8)"
     ];
+
+    // Contorno que separa fatias/pontos: a cor do próprio card, em qualquer tema
+    const COR_SUPERFICIE = "var(--fundo-card)";
 
     const COR_RENDA = "#22c55e";
     const COR_OUTROS = "#9ca3af";
@@ -732,8 +798,8 @@ if (graficoPizzaGastos) {
 
             const path = document.createElementNS(svgNS, "path");
             path.setAttribute("d", criarFatiaSvg(100, 100, 90, anguloAtual, anguloFinal));
-            path.setAttribute("fill", cor);
-            path.setAttribute("stroke", "#ffffff");
+            path.style.fill = cor;
+            path.style.stroke = COR_SUPERFICIE;
             path.setAttribute("stroke-width", "2");
             path.setAttribute("stroke-linejoin", "round");
             path.classList.add("fatia-grafico");
@@ -875,7 +941,7 @@ if (graficoPizzaGastos) {
             pontoVisivel.setAttribute("cy", String(y));
             pontoVisivel.setAttribute("r", "4");
             pontoVisivel.setAttribute("fill", COR_RENDA);
-            pontoVisivel.setAttribute("stroke", "#ffffff");
+            pontoVisivel.style.stroke = COR_SUPERFICIE;
             pontoVisivel.setAttribute("stroke-width", "2");
 
             const aoInteragir = (evento) => mostrarTooltip(evento, [formatarMoeda(ponto.valor), rotuloMesCompleto]);
@@ -1008,7 +1074,7 @@ if (graficoPizzaGastos) {
                     barra.setAttribute("y", String(y));
                     barra.setAttribute("width", String(larguraBarra * 0.85));
                     barra.setAttribute("height", String(altura));
-                    barra.setAttribute("fill", cores[indiceSerie]);
+                    barra.style.fill = cores[indiceSerie];
                     barra.classList.add("barra-grafico");
                     barra.tabIndex = 0;
 
@@ -1161,8 +1227,8 @@ if (graficoPizzaGastos) {
     const carregarGraficos = async () => {
         if (usuarioLogado) {
             const [respostaValores, respostaCategorias] = await Promise.all([
-                fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-                fetch("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
+                fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+                fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
             ]);
 
             valoresCarregados = await respostaValores.json();
@@ -1198,8 +1264,8 @@ if (tabelaGastosMesCalculadora) {
         }
 
         const [respostaValores, respostaCategorias] = await Promise.all([
-            fetch("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-            fetch("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
+            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+            fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
         ]);
 
         const valores = await respostaValores.json();

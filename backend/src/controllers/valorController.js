@@ -15,14 +15,10 @@ const linhaParaValor = (linha) => new Valor(
   linha.idorigem
 )
 
-const listarValores = async (req, res) => {
-  const resultado = await pool.query('select * from valores order by idvalor')
-
-  res.status(200).json(resultado.rows.map(linhaParaValor))
-}
-
+// Em todas as funcoes, o usuario vem do token da sessao (req.idUsuario) e toda
+// consulta filtra por ele: ninguem le ou altera lançamento de outra pessoa
 const listarValoresPorUsuario = async (req, res) => {
-  const idUsuario = Number(req.params.idUsuario)
+  const idUsuario = req.idUsuario
 
   const resultado = await pool.query(
     'select * from valores where idusuario = $1 order by dataentra desc, idvalor desc',
@@ -34,12 +30,7 @@ const listarValoresPorUsuario = async (req, res) => {
 
 const criarValor = async (req, res) => {
   const dadosValor = req.body
-
-  if (!dadosValor.idUsuario) {
-    return res.status(400).json({
-      erro: 'O idUsuario e obrigatorio'
-    })
-  }
+  const idUsuario = req.idUsuario
 
   if (!dadosValor.nomeValor) {
     return res.status(400).json({
@@ -60,9 +51,10 @@ const criarValor = async (req, res) => {
     })
   }
 
+  // A categoria tem que existir E ser do proprio usuario
   const resultadoCategoria = await pool.query(
-    'select tipocatego from categoria where idcatego = $1',
-    [dadosValor.idCategoria]
+    'select tipocatego from categoria where idcatego = $1 and idusuario = $2',
+    [dadosValor.idCategoria, idUsuario]
   )
 
   if (resultadoCategoria.rows.length === 0) {
@@ -83,7 +75,7 @@ const criarValor = async (req, res) => {
        where idusuario = $1 and idcatego = $2 and nomevalor = $3
          and valorvalor = $4 and rescdespes = $5 and dataentra = $6`,
       [
-        dadosValor.idUsuario,
+        idUsuario,
         dadosValor.idCategoria,
         dadosValor.nomeValor,
         dadosValor.valorValor,
@@ -106,7 +98,7 @@ const criarValor = async (req, res) => {
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        returning *`,
       [
-        dadosValor.idUsuario,
+        idUsuario,
         dadosValor.idCategoria,
         dadosValor.nomeValor,
         dadosValor.valorValor,
@@ -132,10 +124,14 @@ const criarValor = async (req, res) => {
   }
 }
 
+// Lançamento de outro usuario responde 404 (como se nao existisse), sem revelar que existe
 const buscarValorPorId = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultado = await pool.query('select * from valores where idvalor = $1', [id])
+  const resultado = await pool.query(
+    'select * from valores where idvalor = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultado.rows.length === 0) {
     return res.status(404).json({
@@ -149,7 +145,10 @@ const buscarValorPorId = async (req, res) => {
 const atualizarValor = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultadoBusca = await pool.query('select * from valores where idvalor = $1', [id])
+  const resultadoBusca = await pool.query(
+    'select * from valores where idvalor = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultadoBusca.rows.length === 0) {
     return res.status(404).json({
@@ -174,7 +173,10 @@ const atualizarValor = async (req, res) => {
 const deletarValor = async (req, res) => {
   const id = Number(req.params.id)
 
-  const resultado = await pool.query('delete from valores where idvalor = $1', [id])
+  const resultado = await pool.query(
+    'delete from valores where idvalor = $1 and idusuario = $2',
+    [id, req.idUsuario]
+  )
 
   if (resultado.rowCount === 0) {
     return res.status(404).json({
@@ -188,7 +190,6 @@ const deletarValor = async (req, res) => {
 }
 
 module.exports = {
-  listarValores,
   listarValoresPorUsuario,
   criarValor,
   buscarValorPorId,

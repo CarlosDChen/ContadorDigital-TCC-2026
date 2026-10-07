@@ -15,12 +15,11 @@ const linhaParaPrevisao = (linha) => new Previsao(
   linha.pago
 )
 
+// O usuario vem sempre do token da sessao (req.idUsuario), nunca da URL ou do corpo
 const listarPrevisoesPorUsuario = async (req, res) => {
-  const idUsuario = Number(req.params.idUsuario)
-
   const resultado = await pool.query(
     'select * from previsao where idusuario = $1 order by idprevisao',
-    [idUsuario]
+    [req.idUsuario]
   )
 
   res.status(200).json(resultado.rows.map(linhaParaPrevisao))
@@ -28,11 +27,12 @@ const listarPrevisoesPorUsuario = async (req, res) => {
 
 // Cria (ou atualiza, se o gasto ja tiver previsao) a previsao de juros simples de um gasto
 const criarPrevisao = async (req, res) => {
-  const { idUsuario, idGasto, taxaJuros } = req.body
+  const idUsuario = req.idUsuario
+  const { idGasto, taxaJuros } = req.body
 
-  if (!idUsuario || !idGasto) {
+  if (!idGasto) {
     return res.status(400).json({
-      erro: 'idUsuario e idGasto sao obrigatorios'
+      erro: 'idGasto e obrigatorio'
     })
   }
 
