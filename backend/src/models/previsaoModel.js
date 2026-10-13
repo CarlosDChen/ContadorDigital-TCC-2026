@@ -10,6 +10,11 @@ class Previsao {
     #valorJuros
     #valorTotal
     #pago
+    #dataOriginal
+    #dataVencimento
+    #dataNaoPago
+    #dataPago
+    #tipoJuros
 
     constructor(
         idPrevisao,
@@ -22,7 +27,12 @@ class Previsao {
         taxaJuros,
         valorJuros,
         valorTotal,
-        pago
+        pago,
+        dataOriginal,
+        dataVencimento,
+        dataNaoPago,
+        dataPago,
+        tipoJuros
     ) {
         this.#idPrevisao = idPrevisao
         this.#idGasto = idGasto
@@ -35,6 +45,11 @@ class Previsao {
         this.#valorJuros = valorJuros
         this.#valorTotal = valorTotal
         this.#pago = pago
+        this.#dataOriginal = dataOriginal
+        this.#dataVencimento = dataVencimento
+        this.#dataNaoPago = dataNaoPago
+        this.#dataPago = dataPago
+        this.#tipoJuros = tipoJuros
     }
 
     get idPrevisao() {
@@ -93,7 +108,6 @@ class Previsao {
         this.#importancia = valor
     }
 
-    // Juros por atraso em % ao mes (juros simples)
     get taxaJuros() {
         return this.#taxaJuros
     }
@@ -126,6 +140,46 @@ class Previsao {
         this.#pago = valor
     }
 
+    get dataOriginal() {
+        return this.#dataOriginal
+    }
+
+    set dataOriginal(valor) {
+        this.#dataOriginal = valor
+    }
+
+    get dataVencimento() {
+        return this.#dataVencimento
+    }
+
+    set dataVencimento(valor) {
+        this.#dataVencimento = valor
+    }
+
+    get dataNaoPago() {
+        return this.#dataNaoPago
+    }
+
+    set dataNaoPago(valor) {
+        this.#dataNaoPago = valor
+    }
+
+    get dataPago() {
+        return this.#dataPago
+    }
+
+    set dataPago(valor) {
+        this.#dataPago = valor
+    }
+
+    get tipoJuros() {
+        return this.#tipoJuros
+    }
+
+    set tipoJuros(valor) {
+        this.#tipoJuros = valor
+    }
+
     toJSON() {
         return {
             idPrevisao: this.#idPrevisao,
@@ -138,7 +192,12 @@ class Previsao {
             taxaJuros: this.#taxaJuros,
             valorJuros: this.#valorJuros,
             valorTotal: this.#valorTotal,
-            pago: this.#pago
+            pago: this.#pago,
+            dataOriginal: this.#dataOriginal,
+            dataVencimento: this.#dataVencimento,
+            dataNaoPago: this.#dataNaoPago,
+            dataPago: this.#dataPago,
+            tipoJuros: this.#tipoJuros
         }
     }
 }

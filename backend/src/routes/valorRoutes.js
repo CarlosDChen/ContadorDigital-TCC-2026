@@ -3,6 +3,7 @@ const router = express.Router()
 
 const {
     listarValoresPorUsuario,
+    listarVencimentosPorUsuario,
     criarValor,
     buscarValorPorId,
     atualizarValor,
@@ -13,6 +14,8 @@ const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticaca
 
 // Todas exigem o token da sessao; cada usuario so enxerga e altera os proprios lançamentos
 router.get('/valores/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarValoresPorUsuario)
+
+router.get('/valores/vencimentos/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarVencimentosPorUsuario)
 
 router.post('/valores', autenticar, criarValor)
 

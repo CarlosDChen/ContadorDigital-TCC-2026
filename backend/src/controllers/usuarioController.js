@@ -96,13 +96,13 @@ const criarUsuario = async (req, res) => {
     // cada uma virando uma linha propria e editavel para esse usuario, ligada
     // de volta ao padrao de origem via idtemplate
     const templates = await client.query(
-      'select idtemplate, nome, tipo from categoria_padrao order by idtemplate'
+      'select idtemplate, nome, tipo, importancia from categoria_padrao order by idtemplate'
     )
 
     for (const template of templates.rows) {
       await client.query(
-        'insert into categoria (idusuario, nomecatego, tipocatego, idtemplate) values ($1, $2, $3, $4)',
-        [idUsuario, template.nome, template.tipo, template.idtemplate]
+        'insert into categoria (idusuario, nomecatego, tipocatego, idtemplate, imporcatego) values ($1, $2, $3, $4, $5)',
+        [idUsuario, template.nome, template.tipo, template.idtemplate, template.importancia]
       )
     }
 

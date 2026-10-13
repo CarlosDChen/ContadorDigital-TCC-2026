@@ -1,4 +1,5 @@
 const pool = require('../config/db')
+const { somarMeses, diferencaEmMeses, diaNoMes } = require('../utils/dataUtils')
 
 const dataDeHoje = () => {
     const hoje = new Date()
@@ -40,9 +41,16 @@ const processarLancamentosRecorrentes = async () => {
             continue
         }
 
+        const dataVencimentoDaCopia = template.datavenc
+            ? diaNoMes(
+                somarMeses(template.datavenc.slice(0, 6), diferencaEmMeses(anoMesTemplate, anoMesDeHoje)),
+                template.datavenc.slice(6, 8)
+            )
+            : null
+
         await pool.query(
-            `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, idorigem)
-             values ($1, $2, $3, $4, 0, $5, $6, null, $7, $8)`,
+            `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, idorigem, datavenc)
+             values ($1, $2, $3, $4, 0, $5, $6, null, $7, $8, $9)`,
             [
                 template.idusuario,
                 template.idcatego,
@@ -51,7 +59,8 @@ const processarLancamentosRecorrentes = async () => {
                 template.rescdespes,
                 hoje,
                 template.discri,
-                template.idvalor
+                template.idvalor,
+                dataVencimentoDaCopia
             ]
         )
 

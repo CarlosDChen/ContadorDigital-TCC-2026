@@ -10,6 +10,8 @@ const categoriaRoutes = require('./src/routes/categoriaRoutes')
 const valorRoutes = require('./src/routes/valorRoutes')
 const previsaoRoutes = require('./src/routes/previsaoRoutes')
 const { processarLancamentosRecorrentes } = require('./src/jobs/lancamentosRecorrentes')
+const { processarViradaDoMes } = require('./src/jobs/viradaDoMes')
+const { enviarAvisosDeVencimento } = require('./src/jobs/avisosVencimento')
 
 const app = express()
 
@@ -28,14 +30,28 @@ app.get('/', (req, res) => {
   res.send('Backend funcionando e atualizado')
 })
 
-app.listen(3000, () => {
+const processarRotinasDoDia = async () => {
+  await processarLancamentosRecorrentes().catch((erro) => console.error('Erro ao processar lançamentos recorrentes:', erro))
+  await processarViradaDoMes().catch((erro) => console.error('Erro ao processar a virada do mês:', erro))
+}
+
+const enviarAvisos = () => {
+  enviarAvisosDeVencimento().catch((erro) => console.error('Erro ao enviar avisos de vencimento:', erro))
+}
+
+app.listen(3000, async () => {
   console.log('Servidor rodando na porta 3000')
 
   // Roda uma vez ao subir (cobre o caso do servidor ter ficado desligado no dia certo)
-  processarLancamentosRecorrentes().catch((erro) => console.error('Erro ao processar lançamentos recorrentes:', erro))
+  await processarRotinasDoDia()
+  enviarAvisos()
 })
 
 // Confere todo dia a meia-noite e meia se algum lançamento recorrente precisa ser lançado
 cron.schedule('30 0 * * *', () => {
-  processarLancamentosRecorrentes().catch((erro) => console.error('Erro ao processar lançamentos recorrentes:', erro))
+  processarRotinasDoDia()
+})
+
+cron.schedule('0 8 * * *', () => {
+  enviarAvisos()
 })

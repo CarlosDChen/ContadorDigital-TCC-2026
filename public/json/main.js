@@ -66,6 +66,68 @@ const fetchApi = async (url, opcoes = {}) => {
     return resposta;
 };
 
+const dataDeHojeTexto = () => {
+    const hoje = new Date();
+    return hoje.getFullYear() + String(hoje.getMonth() + 1).padStart(2, "0") + String(hoje.getDate()).padStart(2, "0");
+};
+
+const formatarDataCurta = (data) => data.slice(6, 8) + "/" + data.slice(4, 6) + "/" + data.slice(2, 4);
+
+const buscarAvisosVencimento = async () => {
+    const sessao = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
+
+    if (!sessao) {
+        return [];
+    }
+
+    try {
+        const resposta = await fetchApi("http://localhost:3000/valores/vencimentos/usuario/" + sessao.idUsuario);
+        return resposta.ok ? await resposta.json() : [];
+    } catch (erro) {
+        return [];
+    }
+};
+
+const textoPrazoVencimento = (aviso) => {
+    if (aviso.situacao === "vencido") {
+        return "venceu em " + formatarDataCurta(aviso.dataVencimento);
+    }
+
+    if (aviso.diasParaVencer === 0) {
+        return "vence hoje";
+    }
+
+    return aviso.diasParaVencer === 1 ? "vence amanhã" : "vence em " + aviso.diasParaVencer + " dias";
+};
+
+const textoSeloVencimento = (aviso) => {
+    if (aviso.situacao === "vencido") {
+        return "Vencido";
+    }
+
+    if (aviso.diasParaVencer === 0) {
+        return "Vence hoje";
+    }
+
+    return aviso.diasParaVencer === 1 ? "Vence amanhã" : "Vence em " + aviso.diasParaVencer + " dias";
+};
+
+const descreverAvisoVencimento = (aviso) =>
+    aviso.nomeValor + " " + textoPrazoVencimento(aviso) + " (R$ " + Number(aviso.valorValor).toFixed(2) + ")";
+
+const renderizarAvisosVencimento = (bloco, avisos) => {
+    const lista = bloco.querySelector("ul");
+    lista.innerHTML = "";
+    bloco.hidden = avisos.length === 0;
+
+    avisos.forEach((aviso) => {
+        const item = document.createElement("li");
+        item.className = aviso.situacao === "vencido" ? "aviso-vencido" : "aviso-a-vencer";
+        item.textContent = "⚠ " + descreverAvisoVencimento(aviso);
+        lista.appendChild(item);
+    });
+};
+
 // RNF-05.1: explicacao curta dos termos financeiros, mostrada ao passar o mouse
 // (ou focar com o teclado). Pra explicar um termo novo: escreva o texto aqui e
 // marque o texto na pagina com <span class="termo" data-termo="chave">Texto</span>
@@ -76,7 +138,7 @@ const GLOSSARIO = {
     tipoLancamento: "Fixo: se repete todo mês, como aluguel ou salário. Variável: acontece uma vez só, como mercado ou uma compra.",
     fixo: "Se repete todo mês, como aluguel ou salário. O sistema lança sozinho, no mesmo dia de cada mês.",
     variavel: "Lançado uma vez só, não se repete todo mês. Ex.: mercado, lazer ou uma compra.",
-    importancia: "O quanto esse gasto é essencial pra você. 1 = não dá pra cortar (ex.: aluguel). 5 = dá pra cortar fácil (ex.: lazer).",
+    importancia: "Em qual parte da regra 50-30-20 esse gasto entra. 1 = necessidade (ex.: aluguel). 2 = desejo (ex.: lazer). 3 = reserva (ex.: investimento).",
     rendaAtiva: "Dinheiro que você ganha trabalhando, como o salário do seu emprego principal.",
     rendaAtivaSecundaria: "Dinheiro de um trabalho extra, além do principal, como um bico ou freela.",
     rendaPassiva: "Dinheiro que entra sem você precisar trabalhar por ele, como um aluguel que você recebe ou o rendimento de um investimento.",
@@ -450,9 +512,27 @@ if (tabelaLancamentos) {
     const inputRecorrente = document.getElementById("input_recorrente");
     const campoDataFinal = document.getElementById("campo_dataFinal");
     const inputDataFinalLancamento = document.getElementById("input_dataFinalLancamento");
+    const campoVencimento = document.getElementById("campo_vencimento");
+    const inputVencimentoLancamento = document.getElementById("input_vencimentoLancamento");
+    const blocoAvisosLancamentos = document.getElementById("avisos_vencimento");
+
+    const overlayJurosAtraso = document.getElementById("overlay_juros");
+    const formJurosAtraso = document.getElementById("form_juros");
+    const msgErroJurosAtraso = document.getElementById("msg_erroJuros");
+    const lblGastoJurosAtraso = document.getElementById("lbl_gastoJuros");
+    const inputValorJurosAtraso = document.getElementById("input_valorJuros");
+    const checkJurosRealAtraso = document.getElementById("check_jurosReal");
+    const checkJurosPorcentagemAtraso = document.getElementById("check_jurosPorcentagem");
+    const checkSemJurosAtraso = document.getElementById("check_semJuros");
+    const checksTipoJurosAtraso = [checkJurosRealAtraso, checkJurosPorcentagemAtraso, checkSemJurosAtraso];
+    let gastoAtrasado = null;
 
     inputDataLancamento.addEventListener("input", () => {
         inputDataLancamento.value = aplicarMascaraData(inputDataLancamento.value);
+    });
+
+    inputVencimentoLancamento.addEventListener("input", () => {
+        inputVencimentoLancamento.value = aplicarMascaraData(inputVencimentoLancamento.value);
     });
 
     inputDataFinalLancamento.addEventListener("input", () => {
@@ -470,7 +550,7 @@ if (tabelaLancamentos) {
     let tipoLancamentoAtual = 0; // 0 = despesa, 1 = receita
 
     const formatarDataExibicao = (dataEntrada) => {
-        const ano = dataEntrada.slice(0, 4);
+        const ano = dataEntrada.slice(2, 4);
         const mes = dataEntrada.slice(4, 6);
         const dia = dataEntrada.slice(6, 8);
         return dia + "/" + mes + "/" + ano;
@@ -503,12 +583,22 @@ if (tabelaLancamentos) {
 
     const carregarLancamentos = async () => {
         if (!usuarioLogado) {
-            tabelaLancamentos.innerHTML = '<tr><td colspan="5">Faça login para ver seus lançamentos.</td></tr>';
+            tabelaLancamentos.innerHTML = '<tr><td colspan="6">Faça login para ver seus lançamentos.</td></tr>';
             return;
         }
 
-        const resposta = await fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario);
+        const [resposta, avisos] = await Promise.all([
+            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+            buscarAvisosVencimento()
+        ]);
         const valores = await resposta.json();
+
+        renderizarAvisosVencimento(blocoAvisosLancamentos, avisos);
+
+        const avisoPorGasto = {};
+        avisos.forEach((aviso) => {
+            avisoPorGasto[String(aviso.idValor)] = aviso;
+        });
 
         tabelaLancamentos.innerHTML = "";
 
@@ -561,15 +651,107 @@ if (tabelaLancamentos) {
             celulaValor.textContent = valorFormatado;
             linha.appendChild(celulaValor);
 
+            const celulaVencimento = document.createElement("td");
+            celulaVencimento.textContent = valor.dataVencimento ? formatarDataCurta(valor.dataVencimento) : "--";
+
+            const aviso = avisoPorGasto[String(valor.idValor)];
+            if (aviso) {
+                const seloVencimento = document.createElement("span");
+                seloVencimento.className = "badge-tipo selo-vencimento " + (aviso.situacao === "vencido" ? "badge-vencido" : "badge-a-vencer");
+                seloVencimento.textContent = textoSeloVencimento(aviso);
+                celulaVencimento.appendChild(seloVencimento);
+            }
+
+            linha.appendChild(celulaVencimento);
+
             tabelaLancamentos.appendChild(linha);
         });
     };
+
+    const atualizarCampoValorJurosAtraso = () => {
+        inputValorJurosAtraso.disabled = checkSemJurosAtraso.checked;
+        inputValorJurosAtraso.required = !checkSemJurosAtraso.checked;
+
+        if (checkSemJurosAtraso.checked) {
+            inputValorJurosAtraso.value = "";
+        }
+    };
+
+    const abrirPopupJurosAtraso = (gasto) => {
+        gastoAtrasado = gasto;
+        formJurosAtraso.reset();
+        msgErroJurosAtraso.textContent = "";
+        lblGastoJurosAtraso.textContent = gasto.nomeValor + " venceu em " + formatarDataCurta(gasto.dataVencimento) +
+            " e já está atrasada. Informe o juros do atraso.";
+        atualizarCampoValorJurosAtraso();
+        overlayJurosAtraso.classList.add("active");
+    };
+
+    document.getElementById("btn_fecharJuros").addEventListener("click", () => {
+        overlayJurosAtraso.classList.remove("active");
+    });
+
+    overlayJurosAtraso.addEventListener("click", (event) => {
+        if (event.target === overlayJurosAtraso) {
+            overlayJurosAtraso.classList.remove("active");
+        }
+    });
+
+    checksTipoJurosAtraso.forEach((check) => {
+        check.addEventListener("change", () => {
+            if (check.checked) {
+                checksTipoJurosAtraso
+                    .filter((outro) => outro !== check)
+                    .forEach((outro) => {
+                        outro.checked = false;
+                    });
+            }
+
+            atualizarCampoValorJurosAtraso();
+        });
+    });
+
+    formJurosAtraso.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        msgErroJurosAtraso.textContent = "";
+
+        if (!checksTipoJurosAtraso.some((check) => check.checked)) {
+            msgErroJurosAtraso.textContent = "Selecione R$, % ou Sem juros.";
+            return;
+        }
+
+        try {
+            const resposta = await fetchApi("http://localhost:3000/previsoes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    idGasto: gastoAtrasado.idValor,
+                    taxaJuros: checkSemJurosAtraso.checked ? 0 : Number(inputValorJurosAtraso.value),
+                    tipoJuros: checkJurosPorcentagemAtraso.checked ? 1 : 0,
+                    pago: 0
+                })
+            });
+
+            const dados = await resposta.json().catch(() => ({}));
+
+            if (!resposta.ok) {
+                msgErroJurosAtraso.textContent = dados.erro || "Não foi possível salvar o juros.";
+                return;
+            }
+
+            overlayJurosAtraso.classList.remove("active");
+            carregarLancamentos();
+        } catch (erro) {
+            msgErroJurosAtraso.textContent = "Não foi possível conectar ao servidor.";
+        }
+    });
 
     const abrirModalLancamento = (tipo) => {
         tipoLancamentoAtual = tipo;
         tituloModalLancamento.textContent = tipo === 1 ? "Adicionar Renda" : "Adicionar Gasto";
         formLancamento.reset();
         campoDataFinal.hidden = true;
+        campoVencimento.hidden = tipo === 1;
         msgErroLancamento.textContent = "";
         popularSelectCategorias(tipo);
         overlayLancamento.classList.add("active");
@@ -628,6 +810,18 @@ if (tabelaLancamentos) {
             }
         }
 
+        let dataVencimento = null;
+
+        if (tipoLancamentoAtual === 0 && inputVencimentoLancamento.value) {
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(inputVencimentoLancamento.value)) {
+                msgErroLancamento.textContent = "O vencimento deve estar completo, no formato dd/mm/aaaa.";
+                return;
+            }
+
+            const [diaVencimento, mesVencimento, anoVencimento] = inputVencimentoLancamento.value.split("/");
+            dataVencimento = anoVencimento + mesVencimento + diaVencimento;
+        }
+
         // O usuario nao vai no corpo: o backend pega do token da sessao
         const dadosLancamento = {
             idCategoria: Number(idCategoria),
@@ -637,6 +831,7 @@ if (tabelaLancamentos) {
             receitaDespesa: tipoLancamentoAtual,
             dataEntrada: dataEntrada,
             dataFinal: dataFinal,
+            dataVencimento: dataVencimento,
             discricao: ""
         };
 
@@ -671,7 +866,11 @@ if (tabelaLancamentos) {
             }
 
             overlayLancamento.classList.remove("active");
-            carregarLancamentos();
+            await carregarLancamentos();
+
+            if (dados.valor && dados.valor.dataVencimento && dados.valor.dataVencimento < dataDeHojeTexto()) {
+                abrirPopupJurosAtraso(dados.valor);
+            }
         } catch (erro) {
             msgErroLancamento.textContent = "Não foi possível conectar ao servidor.";
         }
@@ -777,6 +976,11 @@ if (rendaEl) {
     };
 
     carregarResumoMensal();
+
+    const blocoAvisosPainel = document.getElementById("avisos_vencimento");
+    if (blocoAvisosPainel && usuarioLogado) {
+        buscarAvisosVencimento().then((avisos) => renderizarAvisosVencimento(blocoAvisosPainel, avisos));
+    }
 }
 
 const graficoPizzaGastos = document.getElementById("grafico_pizza_gastos");
@@ -1371,59 +1575,726 @@ if (graficoPizzaGastos) {
 const tabelaGastosMesCalculadora = document.getElementById("tabela_gastosMesCalculadora");
 if (tabelaGastosMesCalculadora) {
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
+    const selectMesAnoCalculadora = document.getElementById("select_mesAnoCalculadora");
+
+    const NOMES_MESES_CALCULADORA = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
+    const overlayJuros = document.getElementById("overlay_juros");
+    const formJuros = document.getElementById("form_juros");
+    const msgErroJuros = document.getElementById("msg_erroJuros");
+    const lblGastoJuros = document.getElementById("lbl_gastoJuros");
+    const inputValorJuros = document.getElementById("input_valorJuros");
+    const checkJurosReal = document.getElementById("check_jurosReal");
+    const checkJurosPorcentagem = document.getElementById("check_jurosPorcentagem");
+    const checkSemJuros = document.getElementById("check_semJuros");
+    const checksTipoJuros = [checkJurosReal, checkJurosPorcentagem, checkSemJuros];
+
+    const blocoAvisosCalculadora = document.getElementById("avisos_vencimento");
+    let avisosPorGasto = {};
+
+    const btnSalvarCalculadora = document.getElementById("btn_salvarCalculadora");
+    const msgSalvarCalculadora = document.getElementById("msg_salvarCalculadora");
+    const TEXTO_ALTERACOES_PENDENTES = "Há alterações não salvas.";
+
+    const lblReceitaMesCalculadora = document.getElementById("lbl_receitaMesCalculadora");
+    const lblGastoMesCalculadora = document.getElementById("lbl_gastoMesCalculadora");
+    const lblNaoPagoMesCalculadora = document.getElementById("lbl_naoPagoMesCalculadora");
+    const barraLimite = document.getElementById("barra_limite");
+    const barraLimitePreenchimento = document.getElementById("barra_limitePreenchimento");
+    const lblAvisoLimite = document.getElementById("lbl_avisoLimite");
+
+    const graficoPizza503020 = document.getElementById("grafico_pizza503020");
+    const legendaPizza503020 = document.getElementById("legenda_pizza503020");
+    const tabelaPizza503020Corpo = document.querySelector("#tabela_pizza503020 tbody");
+    const tooltipGraficoCalculadora = document.getElementById("tooltip_grafico");
+    const svgNSCalculadora = "http://www.w3.org/2000/svg";
+
+    const PARTES_503020 = [
+        { nome: "Necessidades", importancia: 1, ideal: 50, cor: "var(--serie-1)" },
+        { nome: "Desejos", importancia: 2, ideal: 30, cor: "var(--serie-2)" },
+        { nome: "Reserva", importancia: 3, ideal: 20, cor: "var(--serie-3)" },
+        { nome: "Sem classificação", importancia: null, ideal: null, cor: "#9ca3af" }
+    ];
+
+    let valoresCalculadora = [];
+    let gastosCarregados = [];
+    let categoriasCalculadora = [];
+    let estadoGastos = {};
+    let estadoSalvo = {};
+    let previsoesSalvas = {};
+    let gastoJurosSelecionado = null;
+    let popupAbertoPeloNaoPago = false;
+
+    const ESTADO_PADRAO_GASTO = { naoPago: false, juros: null };
+
+    const estadoDoGasto = (idValor) => estadoGastos[String(idValor)] || ESTADO_PADRAO_GASTO;
+
+    const estadoSalvoDoGasto = (idValor) => estadoSalvo[String(idValor)] || ESTADO_PADRAO_GASTO;
+
+    const estadoMudou = (idValor) =>
+        JSON.stringify(estadoDoGasto(idValor)) !== JSON.stringify(estadoSalvoDoGasto(idValor));
+
+    const estadoDaPrevisao = (previsao) => {
+        const taxa = Number(previsao.taxaJuros);
+        return {
+            naoPago: Number(previsao.pago) === 0,
+            juros: {
+                valor: taxa,
+                tipo: taxa === 0 ? "sem" : (Number(previsao.tipoJuros) === 0 ? "real" : "porcentagem")
+            }
+        };
+    };
+
+    const registrarPrevisaoSalva = (previsao) => {
+        const id = String(previsao.idGasto);
+        previsoesSalvas[id] = previsao;
+        estadoSalvo[id] = estadoDaPrevisao(previsao);
+        estadoGastos[id] = estadoDaPrevisao(previsao);
+    };
+
+    const textoJurosCadastrado = (juros) => {
+        if (juros.tipo === "sem") {
+            return "Sem juros";
+        }
+
+        return juros.valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + (juros.tipo === "real" ? "R$" : "%");
+    };
+
+    const valorBaseDoGasto = (gasto) => {
+        const origem = gasto.idPendente
+            ? valoresCalculadora.find((item) => String(item.idValor) === String(gasto.idPendente))
+            : null;
+        return Number(origem ? origem.valorValor : gasto.valorValor);
+    };
+
+    const calcularValorComJuros = (gasto) => {
+        const valorGasto = Number(gasto.valorValor);
+        const { naoPago, juros } = estadoDoGasto(gasto.idValor);
+
+        if (!naoPago || !juros || juros.tipo === "sem") {
+            return valorGasto;
+        }
+
+        const valorJuros = juros.tipo === "real" ? juros.valor : valorBaseDoGasto(gasto) * juros.valor / 100;
+        return Math.round((valorGasto + valorJuros) * 100) / 100;
+    };
+
+    const jurosDaPendenciaAnterior = (gasto) => {
+        if (!gasto.idPendente) {
+            return null;
+        }
+
+        const anteriores = gastosCarregados
+            .filter((item) =>
+                (String(item.idValor) === String(gasto.idPendente) || String(item.idPendente) === String(gasto.idPendente)) &&
+                item.dataEntrada < gasto.dataEntrada &&
+                estadoSalvo[String(item.idValor)] &&
+                estadoSalvo[String(item.idValor)].naoPago
+            )
+            .sort((a, b) => b.dataEntrada.localeCompare(a.dataEntrada));
+
+        return anteriores.length > 0 ? estadoSalvo[String(anteriores[0].idValor)].juros : null;
+    };
+
+    const mostrarMensagemSalvar = (mensagem, erro) => {
+        msgSalvarCalculadora.textContent = mensagem;
+        msgSalvarCalculadora.classList.toggle("msg-salvar-erro", erro);
+    };
+
+    const atualizarAvisoAlteracoes = () => {
+        const haAlteracoes = gastosCarregados.some((gasto) => estadoMudou(gasto.idValor));
+
+        if (haAlteracoes) {
+            mostrarMensagemSalvar(TEXTO_ALTERACOES_PENDENTES, false);
+        } else if (msgSalvarCalculadora.textContent === TEXTO_ALTERACOES_PENDENTES) {
+            mostrarMensagemSalvar("", false);
+        }
+    };
 
     const formatarDataExibicaoCalculadora = (dataEntrada) => {
-        const ano = dataEntrada.slice(0, 4);
+        const ano = dataEntrada.slice(2, 4);
         const mes = dataEntrada.slice(4, 6);
         const dia = dataEntrada.slice(6, 8);
         return dia + "/" + mes + "/" + ano;
     };
 
-    const carregarGastosMesCalculadora = async () => {
-        if (!usuarioLogado) {
-            tabelaGastosMesCalculadora.innerHTML = '<tr><td colspan="4">Faça login para ver seus gastos.</td></tr>';
+    const nomeCategoriaCalculadora = (idCategoria) => {
+        const categoria = categoriasCalculadora.find((item) => item.idCategoria === idCategoria);
+        return categoria ? categoria.nomeCategoria : "Sem categoria";
+    };
+
+    const mostrarMensagemTabelaCalculadora = (mensagem) => {
+        tabelaGastosMesCalculadora.innerHTML = "";
+        const linha = document.createElement("tr");
+        const celula = document.createElement("td");
+        celula.colSpan = 7;
+        celula.textContent = mensagem;
+        linha.appendChild(celula);
+        tabelaGastosMesCalculadora.appendChild(linha);
+    };
+
+    const importanciaDoGasto = (gasto) => {
+        const categoria = categoriasCalculadora.find((item) => item.idCategoria === gasto.idCategoria);
+        return categoria ? Number(categoria.importanciaCategoria) : null;
+    };
+
+    const resumoDoMesCalculadora = (anoMesSelecionado) => {
+        const somarValores = (lista) => lista.reduce((soma, valor) => soma + Number(valor.valorValor), 0);
+
+        const gastosDoMes = gastosCarregados.filter((gasto) => gasto.dataEntrada.slice(0, 6) === anoMesSelecionado);
+        const receitaMes = somarValores(valoresCalculadora.filter(
+            (valor) => valor.receitaDespesa === 1 && valor.dataEntrada.slice(0, 6) === anoMesSelecionado
+        ));
+        const gastosNaoPagos = gastosDoMes.filter((gasto) => estadoDoGasto(gasto.idValor).naoPago);
+        const naoPagoMes = somarValores(gastosNaoPagos);
+        const naoPagoComJurosMes = gastosNaoPagos.reduce((soma, gasto) => soma + calcularValorComJuros(gasto), 0);
+        const gastoMes = somarValores(gastosDoMes) - naoPagoMes;
+        const estourou = gastoMes > receitaMes;
+        const restamDesejosOuReservas = gastosDoMes.some(
+            (gasto) => [2, 3].includes(importanciaDoGasto(gasto)) && !estadoDoGasto(gasto.idValor).naoPago
+        );
+
+        return {
+            receitaMes,
+            gastoMes,
+            naoPagoMes,
+            naoPagoComJurosMes,
+            estourou,
+            bloquearNecessidades: estourou && restamDesejosOuReservas
+        };
+    };
+
+    const renderizarBarraLimite = (anoMesSelecionado) => {
+        const { receitaMes, gastoMes, naoPagoMes, naoPagoComJurosMes, estourou, bloquearNecessidades } = resumoDoMesCalculadora(anoMesSelecionado);
+        const percentual = receitaMes > 0 ? gastoMes / receitaMes * 100 : (gastoMes > 0 ? 100 : 0);
+
+        lblReceitaMesCalculadora.textContent = "Receita do mês: R$ " + receitaMes.toFixed(2);
+        lblGastoMesCalculadora.textContent = "Gastos do mês: R$ " + gastoMes.toFixed(2) +
+            (receitaMes > 0 ? " (" + percentual.toFixed(0) + "% da receita)" : "");
+
+        lblNaoPagoMesCalculadora.hidden = naoPagoMes === 0;
+        lblNaoPagoMesCalculadora.textContent = "Não pagos (fora da conta): R$ " + naoPagoMes.toFixed(2) +
+            " (vão para o próximo mês como R$ " + naoPagoComJurosMes.toFixed(2) + ")";
+
+        barraLimitePreenchimento.style.width = Math.min(percentual, 100) + "%";
+        barraLimite.classList.toggle("barra-estourada", estourou);
+        barraLimite.setAttribute("aria-label",
+            "Gastos de R$ " + gastoMes.toFixed(2) + " para uma receita de R$ " + receitaMes.toFixed(2));
+
+        lblAvisoLimite.textContent = estourou
+            ? "⚠ Gastos acima da receita em R$ " + (gastoMes - receitaMes).toFixed(2) +
+                (bloquearNecessidades ? ". Marque primeiro como não pagos os desejos e reservas; necessidades só depois." : "")
+            : "";
+    };
+
+    const mostrarTooltipCalculadora = (evento, linhas) => {
+        tooltipGraficoCalculadora.innerHTML = "";
+
+        linhas.forEach((linha, indice) => {
+            const elemento = document.createElement(indice === 0 ? "strong" : "span");
+            elemento.textContent = linha;
+            tooltipGraficoCalculadora.appendChild(elemento);
+        });
+
+        tooltipGraficoCalculadora.classList.add("ativo");
+        tooltipGraficoCalculadora.style.left = evento.clientX + 12 + "px";
+        tooltipGraficoCalculadora.style.top = evento.clientY + 12 + "px";
+    };
+
+    const esconderTooltipCalculadora = () => {
+        tooltipGraficoCalculadora.classList.remove("ativo");
+    };
+
+    const pontoNoCirculo = (anguloGraus) => {
+        const anguloRad = (anguloGraus - 90) * Math.PI / 180;
+        return { x: 100 + 90 * Math.cos(anguloRad), y: 100 + 90 * Math.sin(anguloRad) };
+    };
+
+    const criarFatia503020 = (anguloInicial, anguloFinal) => {
+        if (anguloFinal - anguloInicial >= 359.99) {
+            const circulo = document.createElementNS(svgNSCalculadora, "circle");
+            circulo.setAttribute("cx", "100");
+            circulo.setAttribute("cy", "100");
+            circulo.setAttribute("r", "90");
+            return circulo;
+        }
+
+        const inicio = pontoNoCirculo(anguloFinal);
+        const fim = pontoNoCirculo(anguloInicial);
+        const arcoGrande = anguloFinal - anguloInicial <= 180 ? 0 : 1;
+
+        const path = document.createElementNS(svgNSCalculadora, "path");
+        path.setAttribute("d", [
+            "M", 100, 100,
+            "L", inicio.x, inicio.y,
+            "A", 90, 90, 0, arcoGrande, 0, fim.x, fim.y,
+            "Z"
+        ].join(" "));
+        return path;
+    };
+
+    const renderizarPizza503020 = (anoMesSelecionado) => {
+        graficoPizza503020.innerHTML = "";
+        legendaPizza503020.innerHTML = "";
+        tabelaPizza503020Corpo.innerHTML = "";
+
+        const valoresDoMes = valoresCalculadora.filter((valor) => valor.dataEntrada.slice(0, 6) === anoMesSelecionado);
+
+        const receitaMes = valoresDoMes
+            .filter((valor) => valor.receitaDespesa === 1)
+            .reduce((soma, valor) => soma + Number(valor.valorValor), 0);
+
+        if (receitaMes === 0) {
+            const mensagem = document.createElementNS(svgNSCalculadora, "text");
+            mensagem.setAttribute("x", "100");
+            mensagem.setAttribute("y", "104");
+            mensagem.setAttribute("text-anchor", "middle");
+            mensagem.setAttribute("fill", "#898781");
+            mensagem.setAttribute("font-size", "11");
+            mensagem.textContent = "Sem receita neste mês";
+            graficoPizza503020.appendChild(mensagem);
             return;
         }
 
-        const [respostaValores, respostaCategorias] = await Promise.all([
-            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-            fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
-        ]);
+        const partes = PARTES_503020.map((parte) => ({ ...parte, valor: 0, categorias: new Set() }));
+        const parteSemClassificacao = partes[partes.length - 1];
 
-        const valores = await respostaValores.json();
-        const categorias = await respostaCategorias.json();
+        valoresDoMes
+            .filter((valor) => valor.receitaDespesa === 0)
+            .forEach((gasto) => {
+                const categoria = categoriasCalculadora.find((item) => item.idCategoria === gasto.idCategoria);
+                const importancia = categoria ? Number(categoria.importanciaCategoria) : null;
+                const parte = partes.find((item) => item.importancia !== null && item.importancia === importancia)
+                    || parteSemClassificacao;
 
-        const nomeCategoria = (idCategoria) => {
-            const categoria = categorias.find((item) => item.idCategoria === idCategoria);
-            return categoria ? categoria.nomeCategoria : "Sem categoria";
-        };
+                parte.valor += Number(gasto.valorValor);
+                parte.categorias.add(categoria ? categoria.nomeCategoria : "Sem categoria");
+            });
+
+        const totalGastos = partes.reduce((soma, parte) => soma + parte.valor, 0);
+        const sobraReceita = receitaMes - totalGastos;
+
+        if (sobraReceita > 0) {
+            partes[2].valor += sobraReceita;
+            partes[2].categorias.add("Sobra da receita");
+        }
+
+        const totalPizza = partes.reduce((soma, parte) => soma + parte.valor, 0);
+        let anguloAtual = 0;
+
+        partes
+            .filter((parte) => parte.valor > 0 || parte.ideal !== null)
+            .forEach((parte) => {
+                const percentualReceita = parte.valor / receitaMes * 100;
+                const listaCategorias = Array.from(parte.categorias).join(", ");
+                const textoIdeal = parte.ideal !== null ? parte.ideal + "%" : "--";
+
+                if (parte.valor > 0) {
+                    const anguloFinal = anguloAtual + (parte.valor / totalPizza) * 360;
+                    const fatia = criarFatia503020(anguloAtual, anguloFinal);
+                    fatia.style.fill = parte.cor;
+                    fatia.style.stroke = "var(--fundo-card)";
+                    fatia.setAttribute("stroke-width", "2");
+                    fatia.setAttribute("stroke-linejoin", "round");
+                    fatia.classList.add("fatia-grafico");
+                    fatia.tabIndex = 0;
+
+                    const linhasTooltip = [
+                        "R$ " + parte.valor.toFixed(2),
+                        parte.nome + " · " + percentualReceita.toFixed(1) + "% da receita (ideal " + textoIdeal + ")",
+                        listaCategorias
+                    ];
+                    const aoInteragir = (evento) => mostrarTooltipCalculadora(evento, linhasTooltip);
+                    fatia.addEventListener("pointermove", aoInteragir);
+                    fatia.addEventListener("pointerenter", aoInteragir);
+                    fatia.addEventListener("focus", aoInteragir);
+                    fatia.addEventListener("pointerleave", esconderTooltipCalculadora);
+                    fatia.addEventListener("blur", esconderTooltipCalculadora);
+
+                    graficoPizza503020.appendChild(fatia);
+                    anguloAtual = anguloFinal;
+                }
+
+                const itemLegenda = document.createElement("li");
+                const marcador = document.createElement("span");
+                marcador.className = "marcador-legenda";
+                marcador.style.background = parte.cor;
+                const textoLegenda = document.createElement("span");
+                textoLegenda.textContent = parte.nome + ": " + percentualReceita.toFixed(1) + "%" +
+                    (parte.ideal !== null ? " (ideal " + parte.ideal + "%)" : "");
+                itemLegenda.appendChild(marcador);
+                itemLegenda.appendChild(textoLegenda);
+                legendaPizza503020.appendChild(itemLegenda);
+
+                const linhaTabela = document.createElement("tr");
+                [
+                    parte.nome,
+                    listaCategorias || "--",
+                    "R$ " + parte.valor.toFixed(2),
+                    percentualReceita.toFixed(1) + "%",
+                    textoIdeal
+                ].forEach((texto) => {
+                    const celula = document.createElement("td");
+                    celula.textContent = texto;
+                    linhaTabela.appendChild(celula);
+                });
+                tabelaPizza503020Corpo.appendChild(linhaTabela);
+            });
+    };
+
+    const popularSelectMesAnoCalculadora = () => {
+        const anosMeses = Array.from(
+            new Set(valoresCalculadora.map((valor) => valor.dataEntrada.slice(0, 6)))
+        ).sort((a, b) => b.localeCompare(a));
+        const mesSelecionadoAntes = selectMesAnoCalculadora.value;
+
+        selectMesAnoCalculadora.innerHTML = "";
+
+        if (anosMeses.length === 0) {
+            const opcaoVazia = document.createElement("option");
+            opcaoVazia.value = "";
+            opcaoVazia.textContent = "Nenhum lançamento cadastrado";
+            selectMesAnoCalculadora.appendChild(opcaoVazia);
+            return;
+        }
+
+        anosMeses.forEach((anoMes) => {
+            const ano = anoMes.slice(0, 4);
+            const mes = Number(anoMes.slice(4, 6));
+
+            const opcao = document.createElement("option");
+            opcao.value = anoMes;
+            opcao.textContent = NOMES_MESES_CALCULADORA[mes - 1] + "/" + ano;
+            selectMesAnoCalculadora.appendChild(opcao);
+        });
 
         const hoje = new Date();
         const anoMesAtual = hoje.getFullYear() + String(hoje.getMonth() + 1).padStart(2, "0");
+        if (anosMeses.includes(mesSelecionadoAntes)) {
+            selectMesAnoCalculadora.value = mesSelecionadoAntes;
+        } else {
+            selectMesAnoCalculadora.value = anosMeses.includes(anoMesAtual) ? anoMesAtual : anosMeses[0];
+        }
+    };
 
-        const gastosDoMes = valores
-            .filter((valor) => valor.receitaDespesa === 0 && valor.dataEntrada.slice(0, 6) === anoMesAtual)
-            .sort((a, b) => b.dataEntrada.localeCompare(a.dataEntrada));
+    const atualizarCampoValorJuros = () => {
+        inputValorJuros.disabled = checkSemJuros.checked;
+        inputValorJuros.required = !checkSemJuros.checked;
 
-        tabelaGastosMesCalculadora.innerHTML = "";
+        if (checkSemJuros.checked) {
+            inputValorJuros.value = "";
+        }
+    };
 
-        if (gastosDoMes.length === 0) {
-            tabelaGastosMesCalculadora.innerHTML = '<tr><td colspan="4">Nenhum gasto registrado neste mês.</td></tr>';
+    const abrirPopupJuros = (gasto, peloNaoPago) => {
+        formJuros.reset();
+        msgErroJuros.textContent = "";
+        gastoJurosSelecionado = gasto;
+        popupAbertoPeloNaoPago = peloNaoPago;
+        lblGastoJuros.textContent = gasto.nomeValor + " - R$ " + Number(gasto.valorValor).toFixed(2);
+
+        const juros = estadoDoGasto(gasto.idValor).juros || jurosDaPendenciaAnterior(gasto);
+        if (juros) {
+            inputValorJuros.value = juros.tipo === "sem" ? "" : juros.valor;
+            checkJurosReal.checked = juros.tipo === "real";
+            checkJurosPorcentagem.checked = juros.tipo === "porcentagem";
+            checkSemJuros.checked = juros.tipo === "sem";
+        }
+
+        atualizarCampoValorJuros();
+        overlayJuros.classList.add("active");
+    };
+
+    const fecharPopupJuros = () => {
+        overlayJuros.classList.remove("active");
+
+        if (popupAbertoPeloNaoPago) {
+            const id = String(gastoJurosSelecionado.idValor);
+            estadoGastos[id] = { naoPago: false, juros: estadoSalvoDoGasto(id).juros };
+            popupAbertoPeloNaoPago = false;
+            renderizarGastosMesCalculadora();
+        }
+    };
+
+    document.getElementById("btn_fecharJuros").addEventListener("click", fecharPopupJuros);
+
+    overlayJuros.addEventListener("click", (event) => {
+        if (event.target === overlayJuros) {
+            fecharPopupJuros();
+        }
+    });
+
+    checksTipoJuros.forEach((check) => {
+        check.addEventListener("change", () => {
+            if (check.checked) {
+                checksTipoJuros
+                    .filter((outro) => outro !== check)
+                    .forEach((outro) => {
+                        outro.checked = false;
+                    });
+            }
+
+            atualizarCampoValorJuros();
+        });
+    });
+
+    formJuros.addEventListener("submit", (event) => {
+        event.preventDefault();
+        msgErroJuros.textContent = "";
+
+        if (!checksTipoJuros.some((check) => check.checked)) {
+            msgErroJuros.textContent = "Selecione R$, % ou Sem juros.";
             return;
         }
+
+        estadoGastos[String(gastoJurosSelecionado.idValor)] = {
+            naoPago: true,
+            juros: checkSemJuros.checked
+                ? { valor: 0, tipo: "sem" }
+                : { valor: Number(inputValorJuros.value), tipo: checkJurosReal.checked ? "real" : "porcentagem" }
+        };
+
+        popupAbertoPeloNaoPago = false;
+        overlayJuros.classList.remove("active");
+        renderizarGastosMesCalculadora();
+    });
+
+    const montarItensParaSalvar = () => {
+        const hoje = dataDeHojeTexto();
+        const anoMesSelecionado = selectMesAnoCalculadora.value;
+        const itens = [];
+
+        gastosCarregados.forEach((gasto) => {
+            const id = String(gasto.idValor);
+            const { naoPago, juros } = estadoDoGasto(id);
+
+            if (estadoMudou(id)) {
+                if (!naoPago && !previsoesSalvas[id]) {
+                    estadoGastos[id] = ESTADO_PADRAO_GASTO;
+                } else {
+                    const jurosEnviado = juros || { valor: 0, tipo: "sem" };
+                    itens.push({
+                        idGasto: gasto.idValor,
+                        taxaJuros: jurosEnviado.valor,
+                        tipoJuros: jurosEnviado.tipo === "porcentagem" ? 1 : 0,
+                        pago: naoPago ? 0 : 1
+                    });
+                    return;
+                }
+            }
+
+            const confirmarComoPago = !previsoesSalvas[id] &&
+                gasto.dataEntrada.slice(0, 6) === anoMesSelecionado &&
+                anoMesSelecionado <= hoje.slice(0, 6) &&
+                (!gasto.dataVencimento || gasto.dataVencimento <= hoje);
+
+            if (confirmarComoPago) {
+                itens.push({ idGasto: gasto.idValor, taxaJuros: 0, tipoJuros: 0, pago: 1 });
+            }
+        });
+
+        return itens;
+    };
+
+    const salvarAlteracoesCalculadora = async () => {
+        const itens = montarItensParaSalvar();
+
+        if (itens.length === 0) {
+            renderizarGastosMesCalculadora();
+            mostrarMensagemSalvar("Nenhuma alteração para salvar.", false);
+            return;
+        }
+
+        btnSalvarCalculadora.disabled = true;
+        mostrarMensagemSalvar("Salvando...", false);
+
+        try {
+            const resposta = await fetchApi("http://localhost:3000/previsoes/lote", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ itens })
+            });
+
+            const dados = await resposta.json().catch(() => ({}));
+
+            if (!resposta.ok) {
+                const gastoComErro = gastosCarregados.find((gasto) => String(gasto.idValor) === String(dados.idGasto));
+                throw new Error((dados.erro || "Não foi possível salvar.") + (gastoComErro ? " (" + gastoComErro.nomeValor + ")" : ""));
+            }
+
+            await carregarGastosMesCalculadora();
+            mostrarMensagemSalvar("Alterações salvas.", false);
+        } catch (erro) {
+            renderizarGastosMesCalculadora();
+            mostrarMensagemSalvar(erro.message || "Não foi possível conectar ao servidor.", true);
+        } finally {
+            btnSalvarCalculadora.disabled = false;
+        }
+    };
+
+    const atualizarAvisosCalculadora = async () => {
+        const avisos = await buscarAvisosVencimento();
+
+        avisosPorGasto = {};
+        avisos.forEach((aviso) => {
+            avisosPorGasto[String(aviso.idValor)] = aviso;
+        });
+
+        renderizarAvisosVencimento(blocoAvisosCalculadora, avisos);
+    };
+
+    btnSalvarCalculadora.addEventListener("click", salvarAlteracoesCalculadora);
+
+    window.addEventListener("beforeunload", (event) => {
+        if (gastosCarregados.some((gasto) => estadoMudou(gasto.idValor))) {
+            event.preventDefault();
+            event.returnValue = "";
+        }
+    });
+
+    const renderizarGastosMesCalculadora = () => {
+        const anoMesSelecionado = selectMesAnoCalculadora.value;
+
+        renderizarBarraLimite(anoMesSelecionado);
+        renderizarPizza503020(anoMesSelecionado);
+        atualizarAvisoAlteracoes();
+
+        const { bloquearNecessidades } = resumoDoMesCalculadora(anoMesSelecionado);
+
+        const gastosDoMes = gastosCarregados
+            .filter((valor) => valor.dataEntrada.slice(0, 6) === anoMesSelecionado)
+            .sort((a, b) => b.dataEntrada.localeCompare(a.dataEntrada));
+
+        if (gastosDoMes.length === 0) {
+            mostrarMensagemTabelaCalculadora("Nenhum gasto registrado neste mês.");
+            return;
+        }
+
+        tabelaGastosMesCalculadora.innerHTML = "";
 
         gastosDoMes.forEach((valor) => {
             const linha = document.createElement("tr");
 
-            linha.innerHTML =
-                "<td>" + formatarDataExibicaoCalculadora(valor.dataEntrada) + "</td>" +
-                "<td>" + valor.nomeValor + "</td>" +
-                "<td>" + nomeCategoria(valor.idCategoria) + "</td>" +
-                '<td class="valor-negativo">-R$ ' + Number(valor.valorValor).toFixed(2) + "</td>";
+            [
+                formatarDataExibicaoCalculadora(valor.dataEntrada),
+                valor.nomeValor,
+                nomeCategoriaCalculadora(valor.idCategoria)
+            ].forEach((texto) => {
+                const celula = document.createElement("td");
+                celula.textContent = texto;
+                linha.appendChild(celula);
+            });
+
+            const celulaValor = document.createElement("td");
+            celulaValor.className = "valor-negativo";
+            celulaValor.textContent = "-R$ " + Number(valor.valorValor).toFixed(2);
+            linha.appendChild(celulaValor);
+
+            const id = String(valor.idValor);
+            const estado = estadoDoGasto(id);
+
+            const celulaJuros = document.createElement("td");
+
+            if (estado.naoPago) {
+                const textoJuros = document.createElement("button");
+                textoJuros.type = "button";
+                textoJuros.className = "texto-juros";
+                textoJuros.textContent = estado.juros ? textoJurosCadastrado(estado.juros) : "Juros";
+                textoJuros.setAttribute("aria-label", "Cadastrar juros de " + valor.nomeValor);
+                textoJuros.addEventListener("click", () => abrirPopupJuros(valor, false));
+                celulaJuros.appendChild(textoJuros);
+            } else {
+                const semJuros = document.createElement("span");
+                semJuros.className = "texto-juros-desativado";
+                semJuros.textContent = "--";
+                celulaJuros.appendChild(semJuros);
+            }
+
+            linha.appendChild(celulaJuros);
+
+            const celulaNaoPago = document.createElement("td");
+            const checkNaoPago = document.createElement("input");
+            checkNaoPago.type = "checkbox";
+            checkNaoPago.className = "check-nao-pago";
+            checkNaoPago.checked = estado.naoPago;
+            checkNaoPago.setAttribute("aria-label", "Não pago: " + valor.nomeValor);
+
+            if (bloquearNecessidades && !estado.naoPago && importanciaDoGasto(valor) === 1) {
+                checkNaoPago.disabled = true;
+                checkNaoPago.title = "Marque primeiro como não pagos os gastos de desejo e reserva";
+            }
+            checkNaoPago.addEventListener("change", () => {
+                if (checkNaoPago.checked) {
+                    estadoGastos[id] = { naoPago: true, juros: estadoDoGasto(id).juros };
+                    renderizarGastosMesCalculadora();
+                    abrirPopupJuros(valor, true);
+                } else {
+                    estadoGastos[id] = { naoPago: false, juros: estadoSalvoDoGasto(id).juros };
+                    renderizarGastosMesCalculadora();
+                }
+            });
+
+            celulaNaoPago.appendChild(checkNaoPago);
+
+            const avisoDoGasto = avisosPorGasto[id];
+            if (avisoDoGasto) {
+                const iconeVencimento = document.createElement("span");
+                iconeVencimento.className = "icone-vencimento " + (avisoDoGasto.situacao === "vencido" ? "icone-vencido" : "icone-a-vencer");
+                iconeVencimento.textContent = "⚠";
+                iconeVencimento.title = textoSeloVencimento(avisoDoGasto) + " (" + formatarDataCurta(avisoDoGasto.dataVencimento) + ")";
+                iconeVencimento.setAttribute("aria-label", iconeVencimento.title);
+                iconeVencimento.setAttribute("role", "img");
+                celulaNaoPago.appendChild(iconeVencimento);
+            }
+
+            linha.appendChild(celulaNaoPago);
+
+            const celulaValorComJuros = document.createElement("td");
+            celulaValorComJuros.className = "valor-negativo";
+            celulaValorComJuros.textContent = "-R$ " + calcularValorComJuros(valor).toFixed(2);
+            linha.appendChild(celulaValorComJuros);
 
             tabelaGastosMesCalculadora.appendChild(linha);
         });
     };
+
+    const carregarGastosMesCalculadora = async () => {
+        if (!usuarioLogado) {
+            popularSelectMesAnoCalculadora();
+            renderizarBarraLimite("");
+            renderizarPizza503020("");
+            mostrarMensagemTabelaCalculadora("Faça login para ver seus gastos.");
+            return;
+        }
+
+        const [respostaValores, respostaCategorias, respostaPrevisoes] = await Promise.all([
+            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+            fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario),
+            fetchApi("http://localhost:3000/previsoes/usuario/" + usuarioLogado.idUsuario)
+        ]);
+
+        const valores = await respostaValores.json();
+        categoriasCalculadora = await respostaCategorias.json();
+        const previsoes = respostaPrevisoes.ok ? await respostaPrevisoes.json() : [];
+
+        valoresCalculadora = valores;
+        gastosCarregados = valores.filter((valor) => valor.receitaDespesa === 0);
+
+        estadoGastos = {};
+        estadoSalvo = {};
+        previsoesSalvas = {};
+        previsoes.forEach(registrarPrevisaoSalva);
+
+        await atualizarAvisosCalculadora();
+
+        popularSelectMesAnoCalculadora();
+        renderizarGastosMesCalculadora();
+    };
+
+    selectMesAnoCalculadora.addEventListener("change", renderizarGastosMesCalculadora);
 
     carregarGastosMesCalculadora();
 }

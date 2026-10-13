@@ -33,6 +33,12 @@ const criarCategoria = async (req, res) => {
     })
   }
 
+  if (![1, 2, 3].includes(Number(dadosCategoria.importanciaCategoria))) {
+    return res.status(400).json({
+      erro: 'A importancia da categoria deve ser 1, 2 ou 3'
+    })
+  }
+
   try {
     const resultado = await pool.query(
       `insert into categoria (idusuario, nomecatego, tipocatego, desccatego, imporcatego)

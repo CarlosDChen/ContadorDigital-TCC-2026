@@ -1,5 +1,7 @@
 const pool = require('../config/db')
 const Valor = require('../models/valorModel')
+const { dataValida } = require('../utils/dataUtils')
+const { buscarGastosComAviso } = require('../services/vencimentoService')
 
 const linhaParaValor = (linha) => new Valor(
   linha.idvalor,
@@ -12,7 +14,9 @@ const linhaParaValor = (linha) => new Valor(
   linha.dataentra,
   linha.datafinal,
   linha.discri,
-  linha.idorigem
+  linha.idorigem,
+  linha.datavenc,
+  linha.idpendente
 )
 
 // Em todas as funcoes, o usuario vem do token da sessao (req.idUsuario) e toda
@@ -69,6 +73,17 @@ const criarValor = async (req, res) => {
     })
   }
 
+  const informouVencimento = dadosValor.receitaDespesa === 0 &&
+    dadosValor.dataVencimento !== undefined && dadosValor.dataVencimento !== null && dadosValor.dataVencimento !== ''
+
+  if (informouVencimento && !dataValida(dadosValor.dataVencimento)) {
+    return res.status(400).json({
+      erro: 'A data de vencimento e invalida'
+    })
+  }
+
+  const dataVencimento = informouVencimento ? String(dadosValor.dataVencimento) : null
+
   if (!dadosValor.confirmarDuplicado) {
     const resultadoDuplicado = await pool.query(
       `select 1 from valores
@@ -94,8 +109,8 @@ const criarValor = async (req, res) => {
 
   try {
     const resultado = await pool.query(
-      `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, datavenc)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        returning *`,
       [
         idUsuario,
@@ -106,7 +121,8 @@ const criarValor = async (req, res) => {
         dadosValor.receitaDespesa,
         dadosValor.dataEntrada,
         dadosValor.dataFinal,
-        dadosValor.discricao
+        dadosValor.discricao,
+        dataVencimento
       ]
     )
 
@@ -189,8 +205,23 @@ const deletarValor = async (req, res) => {
   })
 }
 
+const listarVencimentosPorUsuario = async (req, res) => {
+  const avisos = await buscarGastosComAviso(req.idUsuario)
+
+  res.status(200).json(avisos.map(({ linha, situacao, diasParaVencer }) => ({
+    idValor: linha.idvalor,
+    nomeValor: linha.nomevalor,
+    valorValor: linha.valorvalor,
+    dataEntrada: linha.dataentra,
+    dataVencimento: linha.datavenc,
+    situacao,
+    diasParaVencer
+  })))
+}
+
 module.exports = {
   listarValoresPorUsuario,
+  listarVencimentosPorUsuario,
   criarValor,
   buscarValorPorId,
   atualizarValor,

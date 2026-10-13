@@ -10,6 +10,8 @@ class Valor {
     #dataFinal
     #discricao
     #idOrigem
+    #dataVencimento
+    #idPendente
 
     constructor(
         idValor,
@@ -22,7 +24,9 @@ class Valor {
         dataEntrada,
         dataFinal,
         discricao,
-        idOrigem
+        idOrigem,
+        dataVencimento,
+        idPendente
     ) {
         this.#idValor = idValor
         this.#idUsuario = idUsuario
@@ -35,6 +39,8 @@ class Valor {
         this.#dataFinal = dataFinal
         this.#discricao = discricao
         this.#idOrigem = idOrigem
+        this.#dataVencimento = dataVencimento
+        this.#idPendente = idPendente
     }
 
     get idValor() {
@@ -127,6 +133,22 @@ class Valor {
         this.#idOrigem = valor
     }
 
+    get dataVencimento() {
+        return this.#dataVencimento
+    }
+
+    set dataVencimento(valor) {
+        this.#dataVencimento = valor
+    }
+
+    get idPendente() {
+        return this.#idPendente
+    }
+
+    set idPendente(valor) {
+        this.#idPendente = valor
+    }
+
     toJSON() {
         return {
             idValor: this.#idValor,
@@ -139,7 +161,9 @@ class Valor {
             dataEntrada: this.#dataEntrada,
             dataFinal: this.#dataFinal,
             discricao: this.#discricao,
-            idOrigem: this.#idOrigem
+            idOrigem: this.#idOrigem,
+            dataVencimento: this.#dataVencimento,
+            idPendente: this.#idPendente
         }
     }
 }

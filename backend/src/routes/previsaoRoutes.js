@@ -3,7 +3,8 @@ const router = express.Router()
 
 const {
     listarPrevisoesPorUsuario,
-    criarPrevisao
+    criarPrevisao,
+    criarPrevisoesEmLote
 } = require('../controllers/previsaoController')
 
 const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticacao')
@@ -12,5 +13,7 @@ const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticaca
 router.get('/previsoes/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarPrevisoesPorUsuario)
 
 router.post('/previsoes', autenticar, criarPrevisao)
+
+router.post('/previsoes/lote', autenticar, criarPrevisoesEmLote)
 
 module.exports = router
