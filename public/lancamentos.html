@@ -27,6 +27,18 @@
       <button id="btn_adicionarCategoria" class="btn-acao-categoria">+ Adicionar Categoria</button>
     </div>
 
+    <div class="filtros-lancamentos">
+      <label for="input_anoLancamentos">Ano</label>
+      <div class="combo-ano">
+        <input type="text" id="input_anoLancamentos" inputmode="numeric" maxlength="4" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="lista_anosLancamentos" aria-autocomplete="list"
+               aria-describedby="msg_anoLancamentos">
+        <button type="button" id="btn_abrirAnos" class="btn-combo-ano" aria-label="Mostrar anos" tabindex="-1">▾</button>
+        <ul id="lista_anosLancamentos" class="lista-anos" role="listbox" aria-label="Anos" hidden></ul>
+      </div>
+      <span id="msg_anoLancamentos" class="msg-ano" role="status"></span>
+    </div>
+
     <div id="avisos_vencimento" class="avisos-vencimento" hidden>
       <h3>Avisos de vencimento</h3>
       <ul></ul>
@@ -41,6 +53,7 @@
           <th><span class="termo" data-termo="tipoLancamento">Tipo</span></th>
           <th>Valor</th>
           <th>Vencimento</th>
+          <th><span class="sr-only">Ações</span></th>
         </tr>
       </thead>
       <tbody id="tabela_lancamentos"></tbody>
@@ -73,7 +86,7 @@
           <input type="text" id="input_vencimentoLancamento" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10">
         </div>
 
-        <label class="campo-checkbox">
+        <label id="campo_recorrente" class="campo-checkbox">
           <input type="checkbox" id="input_recorrente">
           É recorrente? (repete todo mês a partir deste, no mesmo dia)
         </label>
@@ -83,10 +96,28 @@
           <input type="text" id="input_dataFinalLancamento" placeholder="dd/mm/aaaa" inputmode="numeric" maxlength="10">
         </div>
 
+        <p id="msg_infoLancamento" class="texto-info-modal" hidden></p>
+
         <p id="msg_erroLancamento" class="msg-erro"></p>
 
         <button type="submit" class="btn-login btn-login-submit">Salvar</button>
       </form>
+    </div>
+  </div>
+
+  <div id="overlay_excluir" class="modal-overlay">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="titulo_excluir">
+      <div class="modal-header">
+        <h2 id="titulo_excluir">Excluir lançamento</h2>
+        <button id="btn_fecharExcluir" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <p id="lbl_excluirLancamento" class="texto-confirmacao"></p>
+      <p id="lbl_avisoExcluir" class="texto-info-modal" hidden></p>
+      <p id="msg_erroExcluir" class="msg-erro"></p>
+      <div class="acoes-modal">
+        <button id="btn_cancelarExcluir" type="button" class="btn-cancelar">Cancelar</button>
+        <button id="btn_confirmarExcluir" type="button" class="btn-perigo">Excluir</button>
+      </div>
     </div>
   </div>
 

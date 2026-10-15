@@ -1,6 +1,6 @@
 const pool = require('../config/db')
 const Valor = require('../models/valorModel')
-const { dataValida } = require('../utils/dataUtils')
+const { dataValida, dataDeHoje } = require('../utils/dataUtils')
 const { buscarGastosComAviso } = require('../services/vencimentoService')
 
 const linhaParaValor = (linha) => new Valor(
@@ -158,51 +158,181 @@ const buscarValorPorId = async (req, res) => {
   res.status(200).json(linhaParaValor(resultado.rows[0]))
 }
 
+const textoOuNulo = (texto) => (texto === undefined || texto === null || texto === '' ? null : String(texto))
+
 const atualizarValor = async (req, res) => {
   const id = Number(req.params.id)
+  const dados = req.body
+  const cliente = await pool.connect()
 
-  const resultadoBusca = await pool.query(
-    'select * from valores where idvalor = $1 and idusuario = $2',
-    [id, req.idUsuario]
-  )
-
-  if (resultadoBusca.rows.length === 0) {
-    return res.status(404).json({
-      erro: 'Valor nao encontrado'
-    })
+  const responderErro = async (status, erro) => {
+    await cliente.query('rollback')
+    return res.status(status).json({ erro })
   }
 
-  const valorEncontrado = linhaParaValor(resultadoBusca.rows[0])
-  valorEncontrado.nomeValor = req.body.nomeValor
+  try {
+    await cliente.query('begin')
 
-  await pool.query(
-    'update valores set nomevalor = $1 where idvalor = $2',
-    [valorEncontrado.nomeValor, id]
-  )
+    const resultadoBusca = await cliente.query(
+      'select * from valores where idvalor = $1 and idusuario = $2',
+      [id, req.idUsuario]
+    )
 
-  res.status(200).json({
-    mensagem: 'Valor atualizado com sucesso',
-    valor: valorEncontrado
-  })
+    if (resultadoBusca.rows.length === 0) {
+      return responderErro(404, 'Valor nao encontrado')
+    }
+
+    const atual = resultadoBusca.rows[0]
+    const resultadoPendencias = await cliente.query('select 1 from valores where idpendente = $1 limit 1', [id])
+    const ligadoAPendencia = atual.idpendente !== null || resultadoPendencias.rows.length > 0
+
+    const nomeValor = dados.nomeValor !== undefined ? String(dados.nomeValor).trim() : atual.nomevalor
+
+    if (!nomeValor) {
+      return responderErro(400, 'O nome do lançamento e obrigatorio')
+    }
+
+    const valorValor = dados.valorValor !== undefined ? String(dados.valorValor) : atual.valorvalor
+    const idCategoria = dados.idCategoria !== undefined ? String(dados.idCategoria) : String(atual.idcatego)
+    const dataEntrada = dados.dataEntrada !== undefined ? String(dados.dataEntrada) : atual.dataentra
+    const dataVencimento = atual.rescdespes === 0 && dados.dataVencimento !== undefined
+      ? textoOuNulo(dados.dataVencimento)
+      : atual.datavenc
+
+    const mudouValor = Number(valorValor) !== Number(atual.valorvalor)
+    const mudouCategoria = idCategoria !== String(atual.idcatego)
+    const mudouData = dataEntrada !== atual.dataentra
+    const mudouVencimento = dataVencimento !== atual.datavenc
+
+    if (ligadoAPendencia && (mudouValor || mudouCategoria || mudouData || mudouVencimento)) {
+      return responderErro(409, 'Este lançamento faz parte de uma pendencia com juros: so a descricao pode ser alterada')
+    }
+
+    if (Number.isNaN(Number(valorValor)) || Number(valorValor) <= 0 || valorValor.length > 12) {
+      return responderErro(400, 'O valor deve ser maior que zero e ter no maximo 12 caracteres')
+    }
+
+    if (!dataValida(dataEntrada)) {
+      return responderErro(400, 'A data do lançamento e invalida')
+    }
+
+    if (dataVencimento !== null && !dataValida(dataVencimento)) {
+      return responderErro(400, 'A data de vencimento e invalida')
+    }
+
+    if (mudouCategoria) {
+      const resultadoCategoria = await cliente.query(
+        'select tipocatego from categoria where idcatego = $1 and idusuario = $2',
+        [idCategoria, req.idUsuario]
+      )
+
+      if (resultadoCategoria.rows.length === 0) {
+        return responderErro(400, 'Categoria informada nao existe')
+      }
+
+      if (resultadoCategoria.rows[0].tipocatego !== atual.rescdespes) {
+        return responderErro(400, 'A categoria selecionada nao corresponde ao tipo do lançamento (receita/despesa)')
+      }
+    }
+
+    const resultado = await cliente.query(
+      `update valores
+       set nomevalor = $1, valorvalor = $2, idcatego = $3, dataentra = $4, datavenc = $5,
+           avisovenc = case when $6::boolean then 0 else avisovenc end
+       where idvalor = $7
+       returning *`,
+      [nomeValor, valorValor, idCategoria, dataEntrada, dataVencimento, mudouVencimento, id]
+    )
+
+    await cliente.query(
+      `update previsao pr
+       set valororiginal = v.valorvalor,
+           valortotal = to_char(v.valorvalor::numeric + coalesce(pr.valorjuros::numeric, 0), 'FM999999999990.00'),
+           idcatego = v.idcatego,
+           importancia = c.imporcatego,
+           datavenc = v.datavenc
+       from valores v
+       left join categoria c on c.idcatego = v.idcatego
+       where pr.idgasto = v.idvalor
+         and v.idvalor = $1
+         and pr.pago = 1`,
+      [id]
+    )
+
+    await cliente.query('commit')
+
+    res.status(200).json({
+      mensagem: 'Valor atualizado com sucesso',
+      valor: linhaParaValor(resultado.rows[0])
+    })
+  } catch (erro) {
+    await cliente.query('rollback')
+    throw erro
+  } finally {
+    cliente.release()
+  }
 }
 
 const deletarValor = async (req, res) => {
   const id = Number(req.params.id)
+  const cliente = await pool.connect()
 
-  const resultado = await pool.query(
-    'delete from valores where idvalor = $1 and idusuario = $2',
-    [id, req.idUsuario]
-  )
+  try {
+    await cliente.query('begin')
 
-  if (resultado.rowCount === 0) {
-    return res.status(404).json({
-      erro: 'Valor nao encontrado'
+    const resultadoBusca = await cliente.query(
+      'select * from valores where idvalor = $1 and idusuario = $2',
+      [id, req.idUsuario]
+    )
+
+    if (resultadoBusca.rows.length === 0) {
+      await cliente.query('rollback')
+      return res.status(404).json({
+        erro: 'Valor nao encontrado'
+      })
+    }
+
+    const valor = resultadoBusca.rows[0]
+
+    if (valor.idpendente) {
+      await cliente.query(
+        'delete from valores where idpendente = $1 and dataentra >= $2 and idusuario = $3',
+        [valor.idpendente, valor.dataentra, req.idUsuario]
+      )
+
+      const resultadoAnterior = await cliente.query(
+        `select idvalor from valores
+         where (idvalor = $1 or idpendente = $1) and dataentra < $2 and idusuario = $3
+         order by dataentra desc
+         limit 1`,
+        [valor.idpendente, valor.dataentra, req.idUsuario]
+      )
+
+      if (resultadoAnterior.rows.length > 0) {
+        await cliente.query(
+          'update previsao set pago = 1, datapago = coalesce(datapago, $1) where idgasto = $2',
+          [dataDeHoje(), resultadoAnterior.rows[0].idvalor]
+        )
+      }
+    } else {
+      await cliente.query(
+        'delete from valores where idpendente = $1 and idusuario = $2',
+        [id, req.idUsuario]
+      )
+      await cliente.query('delete from valores where idvalor = $1', [id])
+    }
+
+    await cliente.query('commit')
+
+    res.status(200).json({
+      mensagem: 'Valor deletado com sucesso'
     })
+  } catch (erro) {
+    await cliente.query('rollback')
+    throw erro
+  } finally {
+    cliente.release()
   }
-
-  res.status(200).json({
-    mensagem: 'Valor deletado com sucesso'
-  })
 }
 
 const listarVencimentosPorUsuario = async (req, res) => {

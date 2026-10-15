@@ -135,6 +135,7 @@ const GLOSSARIO = {
     renda: "Todo o dinheiro que entrou neste mês, como salário, vendas e benefícios.",
     gastos: "Todo o dinheiro que saiu neste mês, como contas, compras e lazer.",
     saldo: "Quanto sobrou no mês: a renda menos os gastos. Se ficar negativo, você gastou mais do que ganhou.",
+    valoresEmAberto: "Os valores do mês atual, que ainda não terminou. Eles mudam até o fim do mês, conforme entram novas rendas, gastos e lançamentos recorrentes.",
     tipoLancamento: "Fixo: se repete todo mês, como aluguel ou salário. Variável: acontece uma vez só, como mercado ou uma compra.",
     fixo: "Se repete todo mês, como aluguel ou salário. O sistema lança sozinho, no mesmo dia de cada mês.",
     variavel: "Lançado uma vez só, não se repete todo mês. Ex.: mercado, lazer ou uma compra.",
@@ -514,7 +515,27 @@ if (tabelaLancamentos) {
     const inputDataFinalLancamento = document.getElementById("input_dataFinalLancamento");
     const campoVencimento = document.getElementById("campo_vencimento");
     const inputVencimentoLancamento = document.getElementById("input_vencimentoLancamento");
+    const campoRecorrente = document.getElementById("campo_recorrente");
+    const msgInfoLancamento = document.getElementById("msg_infoLancamento");
+    const inputDescricaoLancamento = document.getElementById("input_descricaoLancamento");
+    const inputValorLancamento = document.getElementById("input_valorLancamento");
+    let idLancamentoEditando = null;
+
+    const overlayExcluir = document.getElementById("overlay_excluir");
+    const lblExcluirLancamento = document.getElementById("lbl_excluirLancamento");
+    const lblAvisoExcluir = document.getElementById("lbl_avisoExcluir");
+    const msgErroExcluir = document.getElementById("msg_erroExcluir");
+    const btnCancelarExcluir = document.getElementById("btn_cancelarExcluir");
+    const btnConfirmarExcluir = document.getElementById("btn_confirmarExcluir");
+    let lancamentoParaExcluir = null;
     const blocoAvisosLancamentos = document.getElementById("avisos_vencimento");
+    const inputAnoLancamentos = document.getElementById("input_anoLancamentos");
+    const listaAnosLancamentos = document.getElementById("lista_anosLancamentos");
+    const msgAnoLancamentos = document.getElementById("msg_anoLancamentos");
+    const ANO_MINIMO = 1900;
+    const ANO_MAXIMO = 2200;
+    let anoLancamentos = String(new Date().getFullYear());
+    inputAnoLancamentos.value = anoLancamentos;
 
     const overlayJurosAtraso = document.getElementById("overlay_juros");
     const formJurosAtraso = document.getElementById("form_juros");
@@ -581,30 +602,295 @@ if (tabelaLancamentos) {
             });
     };
 
-    const carregarLancamentos = async () => {
-        if (!usuarioLogado) {
-            tabelaLancamentos.innerHTML = '<tr><td colspan="6">Faça login para ver seus lançamentos.</td></tr>';
+    let valoresLancamentos = [];
+    let avisoPorGastoLancamentos = {};
+    let previsaoPorGastoLancamentos = {};
+
+    const anoValido = (texto) =>
+        /^\d{4}$/.test(texto) && Number(texto) >= ANO_MINIMO && Number(texto) <= ANO_MAXIMO;
+
+    let anosComLancamento = new Set();
+    let indiceAnoAtivo = -1;
+
+    const itensListaAnos = () => Array.from(listaAnosLancamentos.children);
+
+    const destacarAnoAtivo = (centralizar) => {
+        const itens = itensListaAnos();
+        itens.forEach((item, indice) => item.classList.toggle("ativo", indice === indiceAnoAtivo));
+
+        const ativo = itens[indiceAnoAtivo];
+
+        if (!ativo) {
+            inputAnoLancamentos.removeAttribute("aria-activedescendant");
             return;
         }
 
-        const [resposta, avisos] = await Promise.all([
+        inputAnoLancamentos.setAttribute("aria-activedescendant", ativo.id);
+
+        if (centralizar) {
+            listaAnosLancamentos.scrollTop = ativo.offsetTop - (listaAnosLancamentos.clientHeight - ativo.offsetHeight) / 2;
+        } else if (ativo.offsetTop < listaAnosLancamentos.scrollTop) {
+            listaAnosLancamentos.scrollTop = ativo.offsetTop;
+        } else if (ativo.offsetTop + ativo.offsetHeight > listaAnosLancamentos.scrollTop + listaAnosLancamentos.clientHeight) {
+            listaAnosLancamentos.scrollTop = ativo.offsetTop + ativo.offsetHeight - listaAnosLancamentos.clientHeight;
+        }
+    };
+
+    const montarListaAnos = () => {
+        const texto = inputAnoLancamentos.value.trim();
+        const filtro = anoValido(texto) ? "" : texto;
+
+        listaAnosLancamentos.innerHTML = "";
+
+        for (let ano = ANO_MINIMO; ano <= ANO_MAXIMO; ano++) {
+            const anoTexto = String(ano);
+
+            if (!anoTexto.startsWith(filtro)) {
+                continue;
+            }
+
+            const item = document.createElement("li");
+            item.id = "opcao_ano_" + anoTexto;
+            item.dataset.ano = anoTexto;
+            item.setAttribute("role", "option");
+            item.setAttribute("aria-selected", anoTexto === anoLancamentos ? "true" : "false");
+
+            const textoAno = document.createElement("span");
+            textoAno.textContent = anoTexto;
+            item.appendChild(textoAno);
+
+            if (anosComLancamento.has(anoTexto)) {
+                const marca = document.createElement("span");
+                marca.className = "marca-ano";
+                marca.textContent = "com lançamentos";
+                item.appendChild(marca);
+            }
+
+            item.addEventListener("mousedown", (evento) => {
+                evento.preventDefault();
+                escolherAno(anoTexto);
+            });
+
+            listaAnosLancamentos.appendChild(item);
+        }
+
+        const itens = itensListaAnos();
+        indiceAnoAtivo = itens.findIndex((item) => item.dataset.ano === (filtro ? "" : anoLancamentos));
+
+        if (indiceAnoAtivo === -1 && itens.length > 0) {
+            indiceAnoAtivo = 0;
+        }
+
+        destacarAnoAtivo(true);
+    };
+
+    const abrirListaAnos = () => {
+        if (listaAnosLancamentos.hidden) {
+            listaAnosLancamentos.hidden = false;
+            inputAnoLancamentos.setAttribute("aria-expanded", "true");
+        }
+
+        montarListaAnos();
+    };
+
+    const fecharListaAnos = () => {
+        listaAnosLancamentos.hidden = true;
+        inputAnoLancamentos.setAttribute("aria-expanded", "false");
+        inputAnoLancamentos.removeAttribute("aria-activedescendant");
+    };
+
+    const escolherAno = (ano) => {
+        inputAnoLancamentos.value = ano;
+        aplicarAnoDigitado();
+        fecharListaAnos();
+    };
+
+    const popularListaAnosLancamentos = () => {
+        anosComLancamento = new Set(valoresLancamentos.map((valor) => valor.dataEntrada.slice(0, 4)));
+
+        if (!listaAnosLancamentos.hidden) {
+            montarListaAnos();
+        }
+    };
+
+    const aplicarAnoDigitado = () => {
+        const texto = inputAnoLancamentos.value.trim();
+
+        if (!anoValido(texto)) {
+            if (texto.length === 4) {
+                inputAnoLancamentos.setAttribute("aria-invalid", "true");
+                msgAnoLancamentos.textContent = "Digite um ano entre " + ANO_MINIMO + " e " + ANO_MAXIMO + ".";
+            }
+            return;
+        }
+
+        inputAnoLancamentos.removeAttribute("aria-invalid");
+        msgAnoLancamentos.textContent = "";
+
+        if (texto !== anoLancamentos) {
+            anoLancamentos = texto;
+            renderizarTabelaLancamentos();
+        }
+    };
+
+    inputAnoLancamentos.addEventListener("input", () => {
+        inputAnoLancamentos.value = inputAnoLancamentos.value.replace(/\D/g, "").slice(0, 4);
+        inputAnoLancamentos.removeAttribute("aria-invalid");
+        msgAnoLancamentos.textContent = "";
+        aplicarAnoDigitado();
+        abrirListaAnos();
+    });
+
+    inputAnoLancamentos.addEventListener("click", abrirListaAnos);
+
+    inputAnoLancamentos.addEventListener("keydown", (evento) => {
+        const itens = itensListaAnos();
+
+        if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
+            evento.preventDefault();
+
+            if (listaAnosLancamentos.hidden) {
+                abrirListaAnos();
+                return;
+            }
+
+            const passo = evento.key === "ArrowDown" ? 1 : -1;
+            indiceAnoAtivo = Math.max(0, Math.min(itens.length - 1, indiceAnoAtivo + passo));
+            destacarAnoAtivo(false);
+        } else if (evento.key === "Enter" && !listaAnosLancamentos.hidden && itens[indiceAnoAtivo]) {
+            evento.preventDefault();
+            escolherAno(itens[indiceAnoAtivo].dataset.ano);
+        } else if (evento.key === "Escape" && !listaAnosLancamentos.hidden) {
+            evento.preventDefault();
+            fecharListaAnos();
+        }
+    });
+
+    inputAnoLancamentos.addEventListener("blur", () => {
+        fecharListaAnos();
+
+        if (!anoValido(inputAnoLancamentos.value.trim())) {
+            inputAnoLancamentos.value = anoLancamentos;
+            inputAnoLancamentos.removeAttribute("aria-invalid");
+            msgAnoLancamentos.textContent = "";
+        }
+    });
+
+    const btnAbrirAnos = document.getElementById("btn_abrirAnos");
+
+    btnAbrirAnos.addEventListener("mousedown", (evento) => {
+        evento.preventDefault();
+    });
+
+    btnAbrirAnos.addEventListener("click", () => {
+        if (listaAnosLancamentos.hidden) {
+            inputAnoLancamentos.focus();
+            abrirListaAnos();
+        } else {
+            fecharListaAnos();
+        }
+    });
+
+    const carregarLancamentos = async () => {
+        if (!usuarioLogado) {
+            tabelaLancamentos.innerHTML = '<tr><td colspan="7">Faça login para ver seus lançamentos.</td></tr>';
+            return;
+        }
+
+        const [resposta, avisos, respostaPrevisoes] = await Promise.all([
             fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-            buscarAvisosVencimento()
+            buscarAvisosVencimento(),
+            fetchApi("http://localhost:3000/previsoes/usuario/" + usuarioLogado.idUsuario)
         ]);
-        const valores = await resposta.json();
+        valoresLancamentos = await resposta.json();
+
+        const previsoes = respostaPrevisoes.ok ? await respostaPrevisoes.json() : [];
+        previsaoPorGastoLancamentos = {};
+        previsoes.forEach((previsao) => {
+            previsaoPorGastoLancamentos[String(previsao.idGasto)] = previsao;
+        });
 
         renderizarAvisosVencimento(blocoAvisosLancamentos, avisos);
 
-        const avisoPorGasto = {};
+        avisoPorGastoLancamentos = {};
         avisos.forEach((aviso) => {
-            avisoPorGasto[String(aviso.idValor)] = aviso;
+            avisoPorGastoLancamentos[String(aviso.idValor)] = aviso;
         });
+
+        popularListaAnosLancamentos();
+        renderizarTabelaLancamentos();
+    };
+
+    const renderizarTabelaLancamentos = () => {
+        const valores = valoresLancamentos;
+        const avisoPorGasto = avisoPorGastoLancamentos;
+        const valoresDoAno = valores.filter((valor) => valor.dataEntrada.slice(0, 4) === anoLancamentos);
 
         tabelaLancamentos.innerHTML = "";
 
-        valores.forEach((valor) => {
+        if (valoresDoAno.length === 0) {
+            const linhaVazia = document.createElement("tr");
+            const celulaVazia = document.createElement("td");
+            celulaVazia.colSpan = 7;
+            celulaVazia.textContent = "Nenhum lançamento neste ano.";
+            linhaVazia.appendChild(celulaVazia);
+            tabelaLancamentos.appendChild(linhaVazia);
+            return;
+        }
+
+        const grupos = new Map();
+        const linhasParaExibir = [];
+
+        valoresDoAno.forEach((valor) => {
+            const chaveGrupo = valor.idOrigem !== null
+                ? String(valor.idOrigem)
+                : (valor.recorValor === 1 ? String(valor.idValor) : null);
+
+            if (chaveGrupo === null) {
+                linhasParaExibir.push([valor]);
+                return;
+            }
+
+            if (!grupos.has(chaveGrupo)) {
+                grupos.set(chaveGrupo, []);
+                linhasParaExibir.push(grupos.get(chaveGrupo));
+            }
+
+            grupos.get(chaveGrupo).push(valor);
+        });
+
+        const contemValor = (grupo, idValor) => grupo.some((item) => String(item.idValor) === idValor);
+
+        const linhasFilhas = linhasParaExibir.filter((grupo) =>
+            grupo.length === 1 &&
+            grupo[0].idPendente &&
+            linhasParaExibir.some((outro) => contemValor(outro, String(grupo[0].idPendente)))
+        );
+
+        const linhasOrdenadas = linhasParaExibir.filter((grupo) => !linhasFilhas.includes(grupo));
+
+        linhasFilhas
+            .sort((a, b) => a[0].dataEntrada.localeCompare(b[0].dataEntrada))
+            .forEach((filha) => {
+                const idPai = String(filha[0].idPendente);
+                let posicao = linhasOrdenadas.findIndex((grupo) => contemValor(grupo, idPai));
+
+                while (
+                    posicao + 1 < linhasOrdenadas.length &&
+                    linhasOrdenadas[posicao + 1].length === 1 &&
+                    String(linhasOrdenadas[posicao + 1][0].idPendente) === idPai
+                ) {
+                    posicao++;
+                }
+
+                linhasOrdenadas.splice(posicao + 1, 0, filha);
+            });
+
+        const montarLinhaLancamento = (grupo, indiceSelecionado) => {
+            const valor = grupo[indiceSelecionado];
             const positivo = valor.receitaDespesa === 1;
             const valorFormatado = (positivo ? "R$ " : "-R$ ") + Number(valor.valorValor).toFixed(2);
+            const ehFilha = linhasFilhas.includes(grupo);
             const linha = document.createElement("tr");
 
             // Fixo: e o proprio lançamento recorrente OU foi gerado a partir de um (RD-03/RD-09)
@@ -614,16 +900,49 @@ if (tabelaLancamentos) {
             seloTipo.textContent = fixo ? "Fixo" : "Variável";
             seloTipo.dataset.termo = fixo ? "fixo" : "variavel";
 
+            const celulaData = document.createElement("td");
+
+            if (grupo.length > 1) {
+                const selectDatas = document.createElement("select");
+                selectDatas.className = "select-datas-recorrente";
+                selectDatas.setAttribute("aria-label", "Datas de " + valor.nomeValor + " (" + grupo.length + " lançamentos)");
+
+                grupo.forEach((item, indice) => {
+                    const opcao = document.createElement("option");
+                    opcao.value = String(indice);
+                    opcao.textContent = formatarDataExibicao(item.dataEntrada);
+                    selectDatas.appendChild(opcao);
+                });
+
+                selectDatas.value = String(indiceSelecionado);
+                selectDatas.addEventListener("change", () => {
+                    const novaLinha = montarLinhaLancamento(grupo, Number(selectDatas.value));
+                    linha.replaceWith(novaLinha);
+                    novaLinha.querySelector(".select-datas-recorrente").focus();
+                });
+
+                celulaData.appendChild(selectDatas);
+            } else {
+                celulaData.textContent = formatarDataExibicao(valor.dataEntrada);
+            }
+
+            linha.appendChild(celulaData);
+
             // Texto digitado pelo usuario entra sempre via textContent, nunca innerHTML:
             // uma descricao com <img onerror=...> viraria codigo executado na pagina
-            [
-                formatarDataExibicao(valor.dataEntrada),
-                valor.nomeValor
-            ].forEach((texto) => {
-                const celula = document.createElement("td");
-                celula.textContent = texto;
-                linha.appendChild(celula);
-            });
+            const celulaDescricao = document.createElement("td");
+
+            if (ehFilha) {
+                linha.classList.add("linha-filha");
+                const setaFilha = document.createElement("span");
+                setaFilha.className = "seta-filha";
+                setaFilha.textContent = "↳";
+                setaFilha.setAttribute("aria-hidden", "true");
+                celulaDescricao.appendChild(setaFilha);
+            }
+
+            celulaDescricao.appendChild(document.createTextNode(valor.nomeValor));
+            linha.appendChild(celulaDescricao);
 
             // Categorias de renda com nome técnico (Ativa, Passiva...) ganham explicação
             const celulaCategoria = document.createElement("td");
@@ -662,10 +981,155 @@ if (tabelaLancamentos) {
                 celulaVencimento.appendChild(seloVencimento);
             }
 
+            const previsao = previsaoPorGastoLancamentos[String(valor.idValor)];
+            if (previsao && Number(previsao.pago) === 0) {
+                const seloNaoPago = document.createElement("span");
+                seloNaoPago.className = "badge-tipo selo-vencimento badge-vencido";
+                seloNaoPago.textContent = previsao.dataNaoPago
+                    ? "Não pago em " + formatarDataCurta(previsao.dataNaoPago)
+                    : "Não pago";
+                celulaVencimento.appendChild(seloNaoPago);
+            }
+
             linha.appendChild(celulaVencimento);
 
-            tabelaLancamentos.appendChild(linha);
+            const celulaAcoes = document.createElement("td");
+            celulaAcoes.className = "celula-acoes";
+
+            const btnEditar = document.createElement("button");
+            btnEditar.type = "button";
+            btnEditar.className = "btn-editar";
+            btnEditar.textContent = "Editar";
+            btnEditar.setAttribute("aria-label", "Editar " + valor.nomeValor);
+            btnEditar.addEventListener("click", () => abrirEdicaoLancamento(
+                valor,
+                Boolean(valor.idPendente) || valores.some((item) => String(item.idPendente) === String(valor.idValor))
+            ));
+            celulaAcoes.appendChild(btnEditar);
+
+            const btnExcluir = document.createElement("button");
+            btnExcluir.type = "button";
+            btnExcluir.className = "btn-excluir";
+            btnExcluir.textContent = "Excluir";
+            btnExcluir.setAttribute("aria-label", "Excluir " + valor.nomeValor);
+            btnExcluir.addEventListener("click", () => excluirLancamento(valor, valores));
+            celulaAcoes.appendChild(btnExcluir);
+            linha.appendChild(celulaAcoes);
+
+            return linha;
+        };
+
+        linhasOrdenadas.forEach((grupo) => {
+            tabelaLancamentos.appendChild(montarLinhaLancamento(grupo, 0));
         });
+    };
+
+    const fecharConfirmacaoExclusao = () => {
+        overlayExcluir.classList.remove("active");
+        lancamentoParaExcluir = null;
+    };
+
+    const excluirLancamento = (valor, valores) => {
+        lancamentoParaExcluir = valor;
+        msgErroExcluir.textContent = "";
+        btnConfirmarExcluir.disabled = false;
+
+        lblExcluirLancamento.textContent = "Excluir \"" + valor.nomeValor + "\" de " + formatarDataCurta(valor.dataEntrada) +
+            " (R$ " + Number(valor.valorValor).toFixed(2) + ")? Ele será apagado do banco e não pode ser desfeito.";
+
+        let aviso = "";
+
+        if (valor.idPendente) {
+            aviso = "Como é uma pendência, as pendências seguintes dela também serão apagadas e o gasto do mês anterior passa a contar como pago.";
+        } else if (valores.some((item) => String(item.idPendente) === String(valor.idValor))) {
+            aviso = "As pendências com juros geradas a partir dele também serão apagadas.";
+        } else if (valor.recorValor === 1) {
+            aviso = "Ele deixa de se repetir nos próximos meses. Os lançamentos já gerados continuam.";
+        }
+
+        lblAvisoExcluir.textContent = aviso;
+        lblAvisoExcluir.hidden = aviso === "";
+
+        overlayExcluir.classList.add("active");
+        btnCancelarExcluir.focus();
+    };
+
+    btnConfirmarExcluir.addEventListener("click", async () => {
+        if (!lancamentoParaExcluir) {
+            return;
+        }
+
+        btnConfirmarExcluir.disabled = true;
+        msgErroExcluir.textContent = "";
+
+        try {
+            const resposta = await fetchApi("http://localhost:3000/valores/id/" + lancamentoParaExcluir.idValor, { method: "DELETE" });
+
+            if (!resposta.ok) {
+                const dados = await resposta.json().catch(() => ({}));
+                msgErroExcluir.textContent = dados.erro || "Não foi possível excluir o lançamento.";
+                btnConfirmarExcluir.disabled = false;
+                return;
+            }
+
+            fecharConfirmacaoExclusao();
+            carregarLancamentos();
+        } catch (erro) {
+            msgErroExcluir.textContent = "Não foi possível conectar ao servidor.";
+            btnConfirmarExcluir.disabled = false;
+        }
+    });
+
+    btnCancelarExcluir.addEventListener("click", fecharConfirmacaoExclusao);
+    document.getElementById("btn_fecharExcluir").addEventListener("click", fecharConfirmacaoExclusao);
+
+    overlayExcluir.addEventListener("click", (event) => {
+        if (event.target === overlayExcluir) {
+            fecharConfirmacaoExclusao();
+        }
+    });
+
+    overlayExcluir.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            fecharConfirmacaoExclusao();
+        }
+    });
+
+    const dataParaCampo = (data) => data ? data.slice(6, 8) + "/" + data.slice(4, 6) + "/" + data.slice(0, 4) : "";
+
+    const definirCamposBloqueados = (bloqueado) => {
+        [inputValorLancamento, selectCategoriaLancamento, inputDataLancamento, inputVencimentoLancamento]
+            .forEach((campo) => {
+                campo.disabled = bloqueado;
+            });
+    };
+
+    const abrirEdicaoLancamento = (valor, ligadoAPendencia) => {
+        idLancamentoEditando = valor.idValor;
+        tipoLancamentoAtual = valor.receitaDespesa;
+        tituloModalLancamento.textContent = valor.receitaDespesa === 1 ? "Editar Renda" : "Editar Gasto";
+        formLancamento.reset();
+        msgErroLancamento.textContent = "";
+        popularSelectCategorias(valor.receitaDespesa);
+
+        inputDescricaoLancamento.value = valor.nomeValor;
+        inputValorLancamento.value = Number(valor.valorValor);
+        selectCategoriaLancamento.value = String(valor.idCategoria);
+        inputDataLancamento.value = dataParaCampo(valor.dataEntrada);
+        inputVencimentoLancamento.value = dataParaCampo(valor.dataVencimento);
+
+        campoRecorrente.hidden = true;
+        campoDataFinal.hidden = true;
+        campoVencimento.hidden = valor.receitaDespesa === 1;
+
+        definirCamposBloqueados(ligadoAPendencia);
+        msgInfoLancamento.textContent = ligadoAPendencia
+            ? "Este lançamento faz parte de uma pendência com juros: só a descrição pode ser alterada."
+            : "";
+        msgInfoLancamento.hidden = !ligadoAPendencia;
+
+        overlayLancamento.classList.add("active");
+        inputDescricaoLancamento.focus();
     };
 
     const atualizarCampoValorJurosAtraso = () => {
@@ -747,11 +1211,15 @@ if (tabelaLancamentos) {
     });
 
     const abrirModalLancamento = (tipo) => {
+        idLancamentoEditando = null;
         tipoLancamentoAtual = tipo;
         tituloModalLancamento.textContent = tipo === 1 ? "Adicionar Renda" : "Adicionar Gasto";
         formLancamento.reset();
+        definirCamposBloqueados(false);
+        campoRecorrente.hidden = false;
         campoDataFinal.hidden = true;
         campoVencimento.hidden = tipo === 1;
+        msgInfoLancamento.hidden = true;
         msgErroLancamento.textContent = "";
         popularSelectCategorias(tipo);
         overlayLancamento.classList.add("active");
@@ -820,6 +1288,36 @@ if (tabelaLancamentos) {
 
             const [diaVencimento, mesVencimento, anoVencimento] = inputVencimentoLancamento.value.split("/");
             dataVencimento = anoVencimento + mesVencimento + diaVencimento;
+        }
+
+        if (idLancamentoEditando !== null) {
+            try {
+                const respostaEdicao = await fetchApi("http://localhost:3000/valores/id/" + idLancamentoEditando, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        nomeValor: descricao,
+                        valorValor: valor,
+                        idCategoria: Number(idCategoria),
+                        dataEntrada: dataEntrada,
+                        dataVencimento: dataVencimento
+                    })
+                });
+
+                const dadosEdicao = await respostaEdicao.json().catch(() => ({}));
+
+                if (!respostaEdicao.ok) {
+                    msgErroLancamento.textContent = dadosEdicao.erro || "Não foi possível salvar a edição.";
+                    return;
+                }
+
+                overlayLancamento.classList.remove("active");
+                idLancamentoEditando = null;
+                carregarLancamentos();
+            } catch (erro) {
+                msgErroLancamento.textContent = "Não foi possível conectar ao servidor.";
+            }
+            return;
         }
 
         // O usuario nao vai no corpo: o backend pega do token da sessao
@@ -942,6 +1440,16 @@ if (rendaEl) {
     const saldoEl = document.getElementById("saldo");
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
 
+    const lblMesPainel = document.getElementById("lbl_mesPainel");
+    if (lblMesPainel) {
+        const hojePainel = new Date();
+        const mesPainel = document.createElement("strong");
+        mesPainel.textContent = hojePainel.toLocaleDateString("pt-BR", { month: "long" }) + " de " + hojePainel.getFullYear();
+        lblMesPainel.textContent = "Esses são os valores do mês de ";
+        lblMesPainel.appendChild(mesPainel);
+        lblMesPainel.appendChild(document.createTextNode("."));
+    }
+
     const carregarResumoMensal = async () => {
         if (!usuarioLogado) {
             rendaEl.textContent = "R$ 0,00";
@@ -1037,6 +1545,15 @@ if (graficoPizzaGastos) {
     };
 
     const criarFatiaSvg = (cx, cy, raio, anguloInicial, anguloFinal) => {
+        if (anguloFinal - anguloInicial >= 359.99) {
+            return [
+                "M", cx, cy - raio,
+                "A", raio, raio, 0, 1, 1, cx, cy + raio,
+                "A", raio, raio, 0, 1, 1, cx, cy - raio,
+                "Z"
+            ].join(" ");
+        }
+
         const inicio = polarParaCartesiano(cx, cy, raio, anguloFinal);
         const fim = polarParaCartesiano(cx, cy, raio, anguloInicial);
         const arcoGrande = anguloFinal - anguloInicial <= 180 ? 0 : 1;

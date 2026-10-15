@@ -1,4 +1,4 @@
-const { mesSeguinte } = require('../utils/dataUtils')
+const { mesSeguinte, somarMeses, diferencaEmMeses, diaNoMes } = require('../utils/dataUtils')
 
 const CAMPOS_DA_ORIGEM = `
     coalesce(origem.nomevalor, v.nomevalor) as nomeorigem,
@@ -22,6 +22,12 @@ const criarPendenciaSeguinte = async (cliente, gasto, valorComJuros) => {
     const anoMesDestino = mesSeguinte(gasto.dataentra.slice(0, 6))
     const mesAnoOrigem = gasto.dataorigem.slice(4, 6) + '/' + gasto.dataorigem.slice(2, 4)
     const nomePendencia = gasto.nomeorigem.slice(0, 98) + ' (pendente de ' + mesAnoOrigem + ')'
+    const dataVencimento = gasto.datavencorigem
+        ? diaNoMes(
+            somarMeses(gasto.datavencorigem.slice(0, 6), diferencaEmMeses(gasto.dataorigem.slice(0, 6), anoMesDestino)),
+            gasto.datavencorigem.slice(6, 8)
+        )
+        : null
 
     const resultado = await cliente.query(
         `insert into valores (idusuario, idcatego, nomevalor, valorvalor, recorvalor, rescdespes, dataentra, datafinal, discri, idorigem, datavenc, idpendente)
@@ -34,7 +40,7 @@ const criarPendenciaSeguinte = async (cliente, gasto, valorComJuros) => {
             valorComJuros,
             anoMesDestino + '01',
             gasto.discriorigem,
-            gasto.datavencorigem,
+            dataVencimento,
             gasto.idpendente || gasto.idvalor
         ]
     )
