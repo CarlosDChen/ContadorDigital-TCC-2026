@@ -539,6 +539,16 @@
       margin-top: 24px;
     }
 
+    #tabela_pizza503020 td:nth-child(3) {
+      white-space: nowrap;
+    }
+
+    .aviso-fora-limite {
+      font-weight: 600;
+      white-space: nowrap;
+      color: var(--aviso-vencido-texto);
+    }
+
     .explicacao-calculadora {
       margin-top: 24px;
       font-size: 0.85rem;

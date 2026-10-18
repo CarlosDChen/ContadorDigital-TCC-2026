@@ -2408,6 +2408,13 @@ if (tabelaGastosMesCalculadora) {
                 const percentualReceita = parte.valor / receitaMes * 100;
                 const listaCategorias = Array.from(parte.categorias).join(", ");
                 const textoIdeal = parte.ideal !== null ? parte.ideal + "%" : "--";
+                const ehReserva = parte.importancia === 3;
+                const valorLimite = parte.ideal !== null ? receitaMes * parte.ideal / 100 : null;
+                const textoLimite = valorLimite === null
+                    ? "--"
+                    : (ehReserva ? "pelo menos R$ " : "até R$ ") + valorLimite.toFixed(2);
+                const foraDoLimite = valorLimite !== null &&
+                    (ehReserva ? parte.valor < valorLimite : parte.valor > valorLimite);
 
                 if (parte.valor > 0) {
                     const anguloFinal = anguloAtual + (parte.valor / totalPizza) * 360;
@@ -2422,8 +2429,9 @@ if (tabelaGastosMesCalculadora) {
                     const linhasTooltip = [
                         "R$ " + parte.valor.toFixed(2),
                         parte.nome + " · " + percentualReceita.toFixed(1) + "% da receita (ideal " + textoIdeal + ")",
+                        valorLimite !== null ? "Limite: " + textoLimite : "",
                         listaCategorias
-                    ];
+                    ].filter((linha) => linha !== "");
                     const aoInteragir = (evento) => mostrarTooltipCalculadora(evento, linhasTooltip);
                     fatia.addEventListener("pointermove", aoInteragir);
                     fatia.addEventListener("pointerenter", aoInteragir);
@@ -2458,6 +2466,19 @@ if (tabelaGastosMesCalculadora) {
                     celula.textContent = texto;
                     linhaTabela.appendChild(celula);
                 });
+
+                const celulaLimite = document.createElement("td");
+                celulaLimite.className = "celula-limite";
+                celulaLimite.textContent = textoLimite;
+
+                if (foraDoLimite) {
+                    const aviso = document.createElement("span");
+                    aviso.className = "aviso-fora-limite";
+                    aviso.textContent = ehReserva ? " ⚠ abaixo" : " ⚠ passou";
+                    celulaLimite.appendChild(aviso);
+                }
+
+                linhaTabela.appendChild(celulaLimite);
                 tabelaPizza503020Corpo.appendChild(linhaTabela);
             });
     };
