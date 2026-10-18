@@ -43,6 +43,42 @@ if (btnTema) {
     atualizarBotaoTema();
 }
 
+const btnLogout = document.getElementById("btn_logout");
+const overlayLogout = document.getElementById("overlay_logout");
+if (btnLogout && overlayLogout) {
+    const btnCancelarLogout = document.getElementById("btn_cancelarLogout");
+
+    const fecharConfirmacaoLogout = () => {
+        overlayLogout.classList.remove("active");
+        btnLogout.focus();
+    };
+
+    btnLogout.addEventListener("click", () => {
+        overlayLogout.classList.add("active");
+        btnCancelarLogout.focus();
+    });
+
+    btnCancelarLogout.addEventListener("click", fecharConfirmacaoLogout);
+    document.getElementById("btn_fecharLogout").addEventListener("click", fecharConfirmacaoLogout);
+
+    overlayLogout.addEventListener("click", (event) => {
+        if (event.target === overlayLogout) {
+            fecharConfirmacaoLogout();
+        }
+    });
+
+    overlayLogout.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            fecharConfirmacaoLogout();
+        }
+    });
+
+    document.getElementById("btn_confirmarLogout").addEventListener("click", () => {
+        localStorage.removeItem("usuarioLogado");
+        window.location.href = "landingPage.html";
+    });
+}
+
 // Chamadas ao backend que exigem login: manda o token da sessao (recebido no 2FA)
 // no cabeçalho. Se a sessao expirou ou e invalida (401), limpa o login e volta
 // pra tela inicial. Cadastro e login continuam usando o fetch normal

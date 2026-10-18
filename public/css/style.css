@@ -149,6 +149,18 @@
       background: var(--fundo-hover);
     }
 
+    .btn-logout {
+      border: 1px solid #ef4444;
+      background: #ef4444;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .btn-logout:hover {
+      border-color: #dc2626;
+      background: #dc2626;
+    }
+
     .header-right {
       display: flex;
       align-items: center;
