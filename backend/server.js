@@ -9,9 +9,10 @@ const usuarioRoutes = require('./src/routes/usuarioRoutes')
 const categoriaRoutes = require('./src/routes/categoriaRoutes')
 const valorRoutes = require('./src/routes/valorRoutes')
 const previsaoRoutes = require('./src/routes/previsaoRoutes')
-const { processarLancamentosRecorrentes } = require('./src/jobs/lancamentosRecorrentes')
 const { processarViradaDoMes } = require('./src/jobs/viradaDoMes')
 const { enviarAvisosDeVencimento } = require('./src/jobs/avisosVencimento')
+const { atualizarJurosDiarios } = require('./src/jobs/jurosDiarios')
+const { marcarContasAtrasadas } = require('./src/jobs/situacaoContas')
 
 const app = express()
 
@@ -31,8 +32,9 @@ app.get('/', (req, res) => {
 })
 
 const processarRotinasDoDia = async () => {
-  await processarLancamentosRecorrentes().catch((erro) => console.error('Erro ao processar lançamentos recorrentes:', erro))
   await processarViradaDoMes().catch((erro) => console.error('Erro ao processar a virada do mês:', erro))
+  await atualizarJurosDiarios().catch((erro) => console.error('Erro ao atualizar os juros pro rata:', erro))
+  await marcarContasAtrasadas().catch((erro) => console.error('Erro ao marcar as contas atrasadas:', erro))
 }
 
 const enviarAvisos = () => {
@@ -47,7 +49,6 @@ app.listen(3000, async () => {
   enviarAvisos()
 })
 
-// Confere todo dia a meia-noite e meia se algum lançamento recorrente precisa ser lançado
 cron.schedule('30 0 * * *', () => {
   processarRotinasDoDia()
 })

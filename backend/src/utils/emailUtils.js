@@ -33,7 +33,7 @@ const descreverVencimento = (item) => {
     const data = item.dataVencimento.slice(6, 8) + '/' + item.dataVencimento.slice(4, 6) + '/' + item.dataVencimento.slice(0, 4)
 
     if (item.situacao === 'vencido') {
-        return `venceu em ${data}`
+        return `atrasada desde ${data}`
     }
 
     if (item.diasParaVencer === 0) {
@@ -43,21 +43,28 @@ const descreverVencimento = (item) => {
     return item.diasParaVencer === 1 ? `vence amanhã (${data})` : `vence em ${item.diasParaVencer} dias (${data})`
 }
 
+const FORMATO_REAIS = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+const TEXTO_DO_PEDIDO = {
+    novaDataPagamento: ' (a data de pagamento informada já passou: informe uma nova data de pagamento)',
+    informarEncargos: ' (informe a multa e os juros)'
+}
+
 const enviarAvisoVencimento = async (destinatario, itens) => {
     const linhas = itens.map((item) => ({
         nome: item.nome,
-        texto: `${descreverVencimento(item)} - R$ ${item.valor.toFixed(2)}`
+        texto: `${descreverVencimento(item)} - ${FORMATO_REAIS.format(item.valor)}` + (TEXTO_DO_PEDIDO[item.pedido] || '')
     }))
 
     await transportador.sendMail({
         from: `"Contador Digital" <${process.env.EMAIL_USER}>`,
         to: destinatario,
         subject: 'Aviso de vencimento de contas - Contador Digital',
-        text: 'Estas contas estão perto do vencimento ou já venceram:\n\n' +
+        text: 'Estas contas estão perto do vencimento ou estão atrasadas:\n\n' +
             linhas.map((linha) => `- ${linha.nome}: ${linha.texto}`).join('\n') +
             '\n\nSe alguma não for paga, marque como "Não pago" na Calculadora de Limite para cadastrar o juros.',
         html: `
-            <p>Estas contas estão perto do vencimento ou já venceram:</p>
+            <p>Estas contas estão perto do vencimento ou estão atrasadas:</p>
             <ul>
                 ${linhas.map((linha) => `<li><strong>${escaparHtml(linha.nome)}</strong>: ${escaparHtml(linha.texto)}</li>`).join('')}
             </ul>

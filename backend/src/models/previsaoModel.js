@@ -15,6 +15,13 @@ class Previsao {
     #dataNaoPago
     #dataPago
     #tipoJuros
+    #situacao
+    #valorMulta
+    #formaMulta
+    #contagemJuros
+    #valorJurosPass
+    #dataPrevPagamento
+    #tipoJurosSC
 
     constructor(
         idPrevisao,
@@ -32,7 +39,14 @@ class Previsao {
         dataVencimento,
         dataNaoPago,
         dataPago,
-        tipoJuros
+        tipoJuros,
+        situacao,
+        valorMulta,
+        formaMulta,
+        contagemJuros,
+        valorJurosPass,
+        dataPrevPagamento,
+        tipoJurosSC
     ) {
         this.#idPrevisao = idPrevisao
         this.#idGasto = idGasto
@@ -50,6 +64,13 @@ class Previsao {
         this.#dataNaoPago = dataNaoPago
         this.#dataPago = dataPago
         this.#tipoJuros = tipoJuros
+        this.#situacao = situacao
+        this.#valorMulta = valorMulta
+        this.#formaMulta = formaMulta
+        this.#contagemJuros = contagemJuros
+        this.#valorJurosPass = valorJurosPass
+        this.#dataPrevPagamento = dataPrevPagamento
+        this.#tipoJurosSC = tipoJurosSC
     }
 
     get idPrevisao() {
@@ -180,6 +201,62 @@ class Previsao {
         this.#tipoJuros = valor
     }
 
+    get situacao() {
+        return this.#situacao
+    }
+
+    set situacao(valor) {
+        this.#situacao = valor
+    }
+
+    get valorMulta() {
+        return this.#valorMulta
+    }
+
+    set valorMulta(valor) {
+        this.#valorMulta = valor
+    }
+
+    get formaMulta() {
+        return this.#formaMulta
+    }
+
+    set formaMulta(valor) {
+        this.#formaMulta = valor
+    }
+
+    get contagemJuros() {
+        return this.#contagemJuros
+    }
+
+    set contagemJuros(valor) {
+        this.#contagemJuros = valor
+    }
+
+    get valorJurosPass() {
+        return this.#valorJurosPass
+    }
+
+    set valorJurosPass(valor) {
+        this.#valorJurosPass = valor
+    }
+
+    get dataPrevPagamento() {
+        return this.#dataPrevPagamento
+    }
+
+    set dataPrevPagamento(valor) {
+        this.#dataPrevPagamento = valor
+    }
+
+    get tipoJurosSC() {
+        return this.#tipoJurosSC
+    }
+
+    set tipoJurosSC(valor) {
+        this.#tipoJurosSC = valor
+    }
+
     toJSON() {
         return {
             idPrevisao: this.#idPrevisao,
@@ -197,7 +274,14 @@ class Previsao {
             dataVencimento: this.#dataVencimento,
             dataNaoPago: this.#dataNaoPago,
             dataPago: this.#dataPago,
-            tipoJuros: this.#tipoJuros
+            tipoJuros: this.#tipoJuros,
+            situacao: this.#situacao,
+            valorMulta: this.#valorMulta,
+            formaMulta: this.#formaMulta,
+            contagemJuros: this.#contagemJuros,
+            valorJurosPass: this.#valorJurosPass,
+            dataPrevPagamento: this.#dataPrevPagamento,
+            tipoJurosSC: this.#tipoJurosSC
         }
     }
 }

@@ -40,6 +40,8 @@
       --badge-vencido-texto: #b91c1c;
       --badge-a-vencer-fundo: #fef3c7;
       --badge-a-vencer-texto: #92400e;
+      --badge-paga-fundo: #dcfce7;
+      --badge-paga-texto: #15803d;
 
       /* Paleta categorica dos graficos, em ordem fixa (validada contra daltonismo) */
       --serie-1: #2a78d6;
@@ -85,6 +87,8 @@
       --badge-vencido-texto: #fca5a5;
       --badge-a-vencer-fundo: rgba(245, 158, 11, 0.18);
       --badge-a-vencer-texto: #fcd34d;
+      --badge-paga-fundo: rgba(34, 197, 94, 0.18);
+      --badge-paga-texto: #86efac;
 
       --serie-1: #3987e5;
       --serie-2: #d95926;
@@ -746,6 +750,17 @@
       opacity: 0.4;
     }
 
+    .check-pago {
+      width: 16px;
+      height: 16px;
+      accent-color: #22c55e;
+      cursor: pointer;
+    }
+
+    .celula-situacao {
+      white-space: nowrap;
+    }
+
     .acoes-calculadora {
       display: flex;
       justify-content: flex-end;
@@ -776,6 +791,85 @@
       font-size: 0.9rem;
       color: var(--texto);
       margin-bottom: 8px;
+    }
+
+    .modal-box.modal-encargos {
+      width: 380px;
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+
+    .grupo-opcoes {
+      border: none;
+      min-width: 0;
+      margin-top: 8px;
+    }
+
+    .grupo-opcoes[hidden] {
+      display: none;
+    }
+
+    .grupo-opcoes legend {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--texto-titulo);
+    }
+
+    .opcoes-linha {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 16px;
+    }
+
+    #form_juros .opcoes-linha .campo-checkbox {
+      margin-top: 6px;
+    }
+
+    #form_juros .grupo-opcoes > input {
+      width: 100%;
+      margin-top: 6px;
+    }
+
+    #form_juros .campo-formulario input {
+      width: 100%;
+    }
+
+    .campo-checkbox:has(input:disabled) {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .previsao-encargos {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--borda);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--texto);
+    }
+
+    .previsao-encargos:empty {
+      display: none;
+    }
+
+    .linha-previa {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .linha-previa-total {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--borda);
+      font-weight: 600;
+      color: var(--texto-titulo);
+    }
+
+    .texto-juros span {
+      display: block;
+      text-align: left;
     }
 
     .relatorios-grid {
@@ -1144,6 +1238,11 @@
       color: var(--badge-a-vencer-texto);
     }
 
+    .badge-paga {
+      background: var(--badge-paga-fundo);
+      color: var(--badge-paga-texto);
+    }
+
     .selo-vencimento {
       margin-left: 8px;
     }
@@ -1219,7 +1318,8 @@
     }
 
     .btn-cancelar,
-    .btn-perigo {
+    .btn-perigo,
+    .btn-sucesso {
       padding: 8px 18px;
       border-radius: 6px;
       font-size: 0.9rem;
@@ -1251,6 +1351,36 @@
     .btn-perigo:disabled {
       opacity: 0.6;
       cursor: default;
+    }
+
+    .btn-sucesso {
+      border: 1px solid #22c55e;
+      background: #22c55e;
+      color: #ffffff;
+    }
+
+    .btn-sucesso:hover {
+      background: #16a34a;
+    }
+
+    .btn-sucesso:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .modal-box.modal-saida,
+    .modal-box.modal-excluir-serie {
+      width: 520px;
+      max-width: calc(100vw - 32px);
+    }
+
+    .modal-saida .acoes-modal,
+    .modal-excluir-serie .acoes-modal {
+      flex-wrap: wrap;
+    }
+
+    .acoes-modal button[hidden] {
+      display: none;
     }
 
     #form_lancamento input:disabled,
@@ -1319,6 +1449,17 @@
 
     .aviso-a-vencer {
       color: var(--aviso-a-vencer-texto);
+    }
+
+    .pedido-aviso {
+      padding: 0;
+      border: none;
+      background: none;
+      color: inherit;
+      font: inherit;
+      font-weight: 600;
+      text-decoration: underline;
+      cursor: pointer;
     }
 
     .avisos-painel {

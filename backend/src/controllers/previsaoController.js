@@ -1,12 +1,14 @@
 const pool = require('../config/db')
 const Previsao = require('../models/previsaoModel')
-const { dataDeHoje } = require('../utils/dataUtils')
+const { dataDeHoje, dataValida, mesSeguinte } = require('../utils/dataUtils')
 const {
   CAMPOS_DA_ORIGEM,
-  buscarPendenciaSeguinte,
   salvarPendenciaSeguinte,
+  atualizarPendenciasEmAbertoSeguintes,
+  existePendenciaPosteriorNaoPaga,
   removerPendenciaSeguinte
 } = require('../services/pendenciaService')
+const { calcularEncargos, situacaoDaConta } = require('../services/encargosService')
 
 const linhaParaPrevisao = (linha) => new Previsao(
   linha.idprevisao,
@@ -24,8 +26,18 @@ const linhaParaPrevisao = (linha) => new Previsao(
   linha.datavenc,
   linha.datanaopago,
   linha.datapago,
-  linha.tipojuros
+  linha.tipojuros,
+  linha.situacao,
+  linha.valormulta,
+  linha.formamulta,
+  linha.contagemjuros,
+  linha.valorjurospass,
+  linha.dataprevpag,
+  linha.tipojurossc
 )
+
+const numeroOuPadrao = (valor, padrao) =>
+  valor === undefined || valor === null || valor === '' ? padrao : Number(valor)
 
 // O usuario vem sempre do token da sessao (req.idUsuario), nunca da URL ou do corpo
 const listarPrevisoesPorUsuario = async (req, res) => {
@@ -50,6 +62,41 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
     return { status: 400, erro: 'tipoJuros deve ser 0 (valor em R$) ou 1 (porcentagem)' }
   }
 
+  const tipoJurosSC = numeroOuPadrao(dados.tipoJurosSC, 0)
+
+  if (tipoJurosSC !== 0 && tipoJurosSC !== 1) {
+    return { status: 400, erro: 'tipoJurosSC deve ser 0 (juros simples) ou 1 (juros compostos)' }
+  }
+
+  if (tipoJurosSC === 1 && tipo === 0) {
+    return { status: 400, erro: 'Juros compostos so podem ser informados em porcentagem' }
+  }
+
+  const contagemJuros = numeroOuPadrao(dados.contagemJuros, 0)
+
+  if (contagemJuros !== 0 && contagemJuros !== 1) {
+    return { status: 400, erro: 'contagemJuros deve ser 0 (mensal) ou 1 (diaria, pro rata)' }
+  }
+
+  const formaMulta = numeroOuPadrao(dados.formaMulta, null)
+
+  if (formaMulta !== null && ![0, 1, 2].includes(formaMulta)) {
+    return { status: 400, erro: 'formaMulta deve ser 0 (valor em R$), 1 (porcentagem) ou 2 (sem multa)' }
+  }
+
+  const taxaMulta = formaMulta === 0 || formaMulta === 1 ? Number(dados.taxaMulta) : 0
+
+  if (Number.isNaN(taxaMulta) || taxaMulta < 0 || taxaMulta > 9999999999.99) {
+    return { status: 400, erro: 'A multa deve ser um valor entre 0 e 9.999.999.999,99' }
+  }
+
+  const dataPrevPagamento = dados.dataPrevPagamento || null
+
+  if (dataPrevPagamento !== null && !dataValida(dataPrevPagamento)) {
+    return { status: 400, erro: 'Data de pagamento invalida' }
+  }
+
+  const emAberto = pago === null
   const situacaoPago = pago === undefined || pago === null ? 0 : Number(pago)
 
   if (situacaoPago !== 0 && situacaoPago !== 1) {
@@ -64,10 +111,11 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
 
   // Filtra pelo usuario tambem, pra ninguem criar previsao em gasto de outra pessoa
   const resultadoGasto = await cliente.query(
-    `select v.*, c.imporcatego, origem.valorvalor as valorbase, ${CAMPOS_DA_ORIGEM}
+    `select v.*, c.imporcatego, origem.valorvalor as valorbase, prevorigem.valormulta as multaorigem, ${CAMPOS_DA_ORIGEM}
      from valores v
      left join categoria c on c.idcatego = v.idcatego
      left join valores origem on origem.idvalor = v.idpendente
+     left join previsao prevorigem on prevorigem.idgasto = v.idpendente
      where v.idvalor = $1 and v.idusuario = $2`,
     [idGasto, idUsuario]
   )
@@ -82,23 +130,37 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
     return { status: 400, erro: 'Previsao de juros so pode ser feita para gastos' }
   }
 
+  if (!emAberto && contagemJuros === 1 && !gasto.datavenc) {
+    return { status: 400, erro: 'Juros pro rata precisam da data de vencimento do gasto' }
+  }
+
+  if (!emAberto && dataPrevPagamento !== null) {
+    if (dataPrevPagamento.slice(0, 6) !== mesSeguinte(gasto.dataentra.slice(0, 6))) {
+      return { status: 400, erro: 'A data de pagamento deve ser no mes seguinte ao do gasto' }
+    }
+
+    if (gasto.datavenc && dataPrevPagamento <= gasto.datavenc) {
+      return { status: 400, erro: 'A data de pagamento deve ser depois do vencimento' }
+    }
+  }
+
+  const hoje = dataDeHoje()
+  const encargos = emAberto
+    ? { tipoJuros: tipo, tipoJurosSC: 0, taxaJuros: 0, contagemJuros: 0, formaMulta: null, taxaMulta: 0 }
+    : { tipoJuros: tipo, tipoJurosSC, taxaJuros: taxa, contagemJuros, formaMulta, taxaMulta }
+  const dataPagamentoPrevista = emAberto ? null : dataPrevPagamento
+  const dataFinalDosJuros = situacaoPago === 1 ? hoje : (dataPagamentoPrevista || hoje)
   const valorAtual = Number(gasto.valorvalor)
-  const valorBase = gasto.valorbase !== null ? Number(gasto.valorbase) : valorAtual
-  const valorJuros = tipo === 0
-    ? Math.round(taxa * 100) / 100
-    : Math.round(valorBase * taxa) / 100
-  const valorTotal = Math.round((valorAtual + valorJuros) * 100) / 100
+  const { valorMulta, valorJuros, valorJurosPass, valorTotal } = calcularEncargos(gasto, encargos, dataFinalDosJuros)
 
   if (valorTotal.toFixed(2).length > 12) {
     return { status: 400, erro: 'O valor com juros passa do limite permitido' }
   }
 
-  const pendenciaSeguinte = await buscarPendenciaSeguinte(cliente, gasto)
-
-  if (situacaoPago === 1 && pendenciaSeguinte && pendenciaSeguinte.pago !== null && Number(pendenciaSeguinte.pago) === 0) {
+  if ((situacaoPago === 1 || emAberto) && await existePendenciaPosteriorNaoPaga(cliente, gasto)) {
     return {
       status: 409,
-      erro: 'A pendencia deste gasto no mes seguinte ja esta marcada como nao paga. Desmarque ela primeiro.'
+      erro: 'Uma pendencia deste gasto em um mes seguinte ja esta marcada como nao paga. Desmarque ela primeiro.'
     }
   }
 
@@ -107,11 +169,14 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
     [gasto.idvalor]
   )
   const existente = resultadoExistente.rows[0]
-  const hoje = dataDeHoje()
 
-  const dataNaoPago = situacaoPago === 0
-    ? (existente && Number(existente.pago) === 0 && existente.datanaopago ? existente.datanaopago : hoje)
-    : (existente ? existente.datanaopago : null)
+  let dataNaoPago = existente ? existente.datanaopago : null
+
+  if (emAberto) {
+    dataNaoPago = null
+  } else if (situacaoPago === 0) {
+    dataNaoPago = existente && Number(existente.pago) === 0 && existente.datanaopago ? existente.datanaopago : hoje
+  }
 
   const dataPago = situacaoPago === 1
     ? (existente && Number(existente.pago) === 1 && existente.datapago ? existente.datapago : hoje)
@@ -119,8 +184,9 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
 
   const resultado = await cliente.query(
     `insert into previsao (idgasto, idusuario, idcatego, valororiginal, serepete, importancia, taxajuros, valorjuros, valortotal,
-                           dataoriginal, datavenc, datanaopago, datapago, tipojuros, pago)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                           dataoriginal, datavenc, datanaopago, datapago, tipojuros, pago,
+                           situacao, valormulta, formamulta, contagemjuros, valorjurospass, dataprevpag, tipojurossc)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
      on conflict (idgasto) do update set
        idcatego = excluded.idcatego,
        valororiginal = excluded.valororiginal,
@@ -134,7 +200,14 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
        datanaopago = excluded.datanaopago,
        datapago = excluded.datapago,
        tipojuros = excluded.tipojuros,
-       pago = excluded.pago
+       pago = excluded.pago,
+       situacao = excluded.situacao,
+       valormulta = excluded.valormulta,
+       formamulta = excluded.formamulta,
+       contagemjuros = excluded.contagemjuros,
+       valorjurospass = excluded.valorjurospass,
+       dataprevpag = excluded.dataprevpag,
+       tipojurossc = excluded.tipojurossc
      returning *`,
     [
       gasto.idvalor,
@@ -143,7 +216,7 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
       valorAtual.toFixed(2),
       gasto.recorvalor || 0,
       gasto.imporcatego,
-      taxa,
+      encargos.taxaJuros,
       valorJuros.toFixed(2),
       valorTotal.toFixed(2),
       gasto.dataentra,
@@ -151,12 +224,20 @@ const salvarPrevisao = async (cliente, idUsuario, dados) => {
       dataNaoPago,
       dataPago,
       tipo,
-      situacaoPago
+      situacaoPago,
+      situacaoDaConta(situacaoPago, gasto.datavenc, hoje),
+      valorMulta.toFixed(2),
+      encargos.formaMulta,
+      encargos.contagemJuros,
+      valorJurosPass.toFixed(2),
+      dataPagamentoPrevista,
+      encargos.tipoJurosSC
     ]
   )
 
-  if (situacaoPago === 0) {
-    await salvarPendenciaSeguinte(cliente, gasto, valorTotal.toFixed(2))
+  if (situacaoPago === 0 && !emAberto) {
+    await salvarPendenciaSeguinte(cliente, gasto, valorTotal.toFixed(2), dataPagamentoPrevista)
+    await atualizarPendenciasEmAbertoSeguintes(cliente, gasto)
   } else {
     await removerPendenciaSeguinte(cliente, gasto)
   }

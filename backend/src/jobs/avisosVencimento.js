@@ -26,12 +26,13 @@ const enviarAvisosDeVencimento = async () => {
                 continue
             }
 
-            await enviarAvisoVencimento(email, avisosDoUsuario.map(({ linha, situacao, diasParaVencer }) => ({
+            await enviarAvisoVencimento(email, avisosDoUsuario.map(({ linha, situacao, diasParaVencer, pedido }) => ({
                 nome: linha.nomevalor,
                 valor: Number(linha.valorvalor),
                 dataVencimento: linha.datavenc,
                 situacao,
-                diasParaVencer
+                diasParaVencer,
+                pedido
             })))
 
             for (const { linha, situacao } of avisosDoUsuario) {

@@ -4,6 +4,9 @@ const router = express.Router()
 const {
     listarValoresPorUsuario,
     listarVencimentosPorUsuario,
+    listarRecorrentesNoFimPorUsuario,
+    renovarRecorrente,
+    encerrarRecorrente,
     criarValor,
     buscarValorPorId,
     atualizarValor,
@@ -16,6 +19,12 @@ const { autenticar, exigirProprioUsuario } = require('../middlewares/autenticaca
 router.get('/valores/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarValoresPorUsuario)
 
 router.get('/valores/vencimentos/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarVencimentosPorUsuario)
+
+router.get('/valores/recorrentes/usuario/:idUsuario', autenticar, exigirProprioUsuario, listarRecorrentesNoFimPorUsuario)
+
+router.post('/valores/id/:id/renovar', autenticar, renovarRecorrente)
+
+router.post('/valores/id/:id/encerrar', autenticar, encerrarRecorrente)
 
 router.post('/valores', autenticar, criarValor)
 

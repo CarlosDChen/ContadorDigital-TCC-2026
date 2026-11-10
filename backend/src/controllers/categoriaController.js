@@ -33,11 +33,23 @@ const criarCategoria = async (req, res) => {
     })
   }
 
-  if (![1, 2, 3].includes(Number(dadosCategoria.importanciaCategoria))) {
+  const tipoCategoria = Number(dadosCategoria.tipoCategoria)
+
+  if (![0, 1].includes(tipoCategoria) || dadosCategoria.tipoCategoria === null || dadosCategoria.tipoCategoria === '') {
+    return res.status(400).json({
+      erro: 'O tipo da categoria deve ser 0 (despesa) ou 1 (receita)'
+    })
+  }
+
+  const ehReceita = tipoCategoria === 1
+
+  if (!ehReceita && ![1, 2, 3].includes(Number(dadosCategoria.importanciaCategoria))) {
     return res.status(400).json({
       erro: 'A importancia da categoria deve ser 1, 2 ou 3'
     })
   }
+
+  const importanciaCategoria = ehReceita ? null : Number(dadosCategoria.importanciaCategoria)
 
   try {
     const resultado = await pool.query(
@@ -47,9 +59,9 @@ const criarCategoria = async (req, res) => {
       [
         req.idUsuario,
         dadosCategoria.nomeCategoria,
-        dadosCategoria.tipoCategoria,
+        tipoCategoria,
         dadosCategoria.descCategoria,
-        dadosCategoria.importanciaCategoria
+        importanciaCategoria
       ]
     )
 

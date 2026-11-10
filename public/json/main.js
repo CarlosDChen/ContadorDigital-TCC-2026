@@ -1,21 +1,46 @@
+let confirmarSaidaDaPagina = null;
+
+const irPara = (destino) => {
+    if (typeof destino === "function") {
+        destino();
+        return;
+    }
+
+    window.location.href = destino;
+};
+
+const navegarPara = (destino) => {
+    if (confirmarSaidaDaPagina) {
+        confirmarSaidaDaPagina(destino);
+        return;
+    }
+
+    irPara(destino);
+};
+
+const sairDaConta = () => {
+    localStorage.removeItem("usuarioLogado");
+    window.location.href = "landingPage.html";
+};
+
 const btnLancamentos = document.getElementById("btn_lancamentos");
 if (btnLancamentos) {
     btnLancamentos.addEventListener("click", () => {
-        window.location.href = "lancamentos.html";
+        navegarPara("lancamentos.html");
     });
 }
 
 const btnRelatorios = document.getElementById("btn_relatorios");
 if (btnRelatorios) {
     btnRelatorios.addEventListener("click", () => {
-        window.location.href = "relatorios.html";
+        navegarPara("relatorios.html");
     });
 }
 
 const btnCalculadoraLimite = document.getElementById("btn_calculadoraLimite");
 if (btnCalculadoraLimite) {
     btnCalculadoraLimite.addEventListener("click", () => {
-        window.location.href = "calculadoralimite.html";
+        navegarPara("calculadoralimite.html");
     });
 }
 
@@ -74,14 +99,12 @@ if (btnLogout && overlayLogout) {
     });
 
     document.getElementById("btn_confirmarLogout").addEventListener("click", () => {
-        localStorage.removeItem("usuarioLogado");
-        window.location.href = "landingPage.html";
+        overlayLogout.classList.remove("active");
+        navegarPara(sairDaConta);
     });
 }
 
-// Chamadas ao backend que exigem login: manda o token da sessao (recebido no 2FA)
-// no cabeçalho. Se a sessao expirou ou e invalida (401), limpa o login e volta
-// pra tela inicial. Cadastro e login continuam usando o fetch normal
+
 const fetchApi = async (url, opcoes = {}) => {
     const sessao = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
 
@@ -109,6 +132,15 @@ const dataDeHojeTexto = () => {
 
 const formatarDataCurta = (data) => data.slice(6, 8) + "/" + data.slice(4, 6) + "/" + data.slice(2, 4);
 
+const FORMATO_REAIS = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+const formatarReais = (valor) => FORMATO_REAIS.format(Number(valor) || 0);
+
+const formatarPorcentagem = (valor, casas = 1) =>
+    Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }) + "%";
+
+const formatarReaisSemCentavos = (valor) => "R$ " + Math.round(valor).toLocaleString("pt-BR");
+
 const buscarAvisosVencimento = async () => {
     const sessao = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
 
@@ -126,7 +158,7 @@ const buscarAvisosVencimento = async () => {
 
 const textoPrazoVencimento = (aviso) => {
     if (aviso.situacao === "vencido") {
-        return "venceu em " + formatarDataCurta(aviso.dataVencimento);
+        return "atrasada desde " + formatarDataCurta(aviso.dataVencimento);
     }
 
     if (aviso.diasParaVencer === 0) {
@@ -138,7 +170,7 @@ const textoPrazoVencimento = (aviso) => {
 
 const textoSeloVencimento = (aviso) => {
     if (aviso.situacao === "vencido") {
-        return "Vencido";
+        return "Atrasada";
     }
 
     if (aviso.diasParaVencer === 0) {
@@ -149,9 +181,14 @@ const textoSeloVencimento = (aviso) => {
 };
 
 const descreverAvisoVencimento = (aviso) =>
-    aviso.nomeValor + " " + textoPrazoVencimento(aviso) + " (R$ " + Number(aviso.valorValor).toFixed(2) + ")";
+    aviso.nomeValor + " " + textoPrazoVencimento(aviso) + " (" + formatarReais(aviso.valorValor) + ")";
 
-const renderizarAvisosVencimento = (bloco, avisos) => {
+const TEXTO_DO_PEDIDO_AVISO = {
+    novaDataPagamento: "Informe uma nova data de pagamento",
+    informarEncargos: "Informe a multa e os juros"
+};
+
+const renderizarAvisosVencimento = (bloco, avisos, aoAtenderPedido) => {
     const lista = bloco.querySelector("ul");
     lista.innerHTML = "";
     bloco.hidden = avisos.length === 0;
@@ -160,8 +197,474 @@ const renderizarAvisosVencimento = (bloco, avisos) => {
         const item = document.createElement("li");
         item.className = aviso.situacao === "vencido" ? "aviso-vencido" : "aviso-a-vencer";
         item.textContent = "⚠ " + descreverAvisoVencimento(aviso);
+
+        const textoDoPedido = TEXTO_DO_PEDIDO_AVISO[aviso.pedido];
+
+        if (textoDoPedido) {
+            item.appendChild(document.createTextNode(" · "));
+
+            if (aoAtenderPedido) {
+                const botao = document.createElement("button");
+                botao.type = "button";
+                botao.className = "pedido-aviso";
+                botao.textContent = textoDoPedido;
+                botao.addEventListener("click", () => aoAtenderPedido(aviso));
+                item.appendChild(botao);
+            } else {
+                const link = document.createElement("a");
+                link.className = "pedido-aviso";
+                link.href = "calculadoralimite.html";
+                link.textContent = textoDoPedido;
+                item.appendChild(link);
+            }
+        }
+
         lista.appendChild(item);
     });
+};
+
+const buscarAvisosRecorrentes = async () => {
+    const sessao = JSON.parse(localStorage.getItem("usuarioLogado") || "null");
+
+    if (!sessao) {
+        return [];
+    }
+
+    try {
+        const resposta = await fetchApi("http://localhost:3000/valores/recorrentes/usuario/" + sessao.idUsuario);
+        return resposta.ok ? await resposta.json() : [];
+    } catch (erro) {
+        return [];
+    }
+};
+
+const formatarMesAno = (anoMes) => anoMes.slice(4, 6) + "/" + anoMes.slice(0, 4);
+
+const adicionarAvisosRecorrentes = (bloco, avisosRecorrentes, depoisDeMudar, podeMudar = () => true) => {
+    const lista = bloco.querySelector("ul");
+
+    avisosRecorrentes.forEach((aviso) => {
+        const item = document.createElement("li");
+        item.className = "aviso-a-vencer";
+        item.textContent = "⚠ " + aviso.nomeValor + ": os lançamentos fixos " +
+            (aviso.acabou ? "acabaram em " : "vão até ") + formatarMesAno(aviso.ultimoMes);
+
+        const msgErro = document.createElement("span");
+        msgErro.className = "msg-erro";
+
+        const executar = async (acao, botao) => {
+            if (!podeMudar()) {
+                return;
+            }
+
+            botao.disabled = true;
+            msgErro.textContent = "";
+
+            try {
+                const resposta = await fetchApi("http://localhost:3000/valores/id/" + aviso.idValor + "/" + acao, { method: "POST" });
+
+                if (!resposta.ok) {
+                    const dados = await resposta.json().catch(() => ({}));
+                    msgErro.textContent = " " + (dados.erro || "Não foi possível salvar.");
+                    botao.disabled = false;
+                    return;
+                }
+
+                await depoisDeMudar();
+            } catch (erro) {
+                msgErro.textContent = " Não foi possível conectar ao servidor.";
+                botao.disabled = false;
+            }
+        };
+
+        [["renovar", "Renovar por mais 1 ano"], ["encerrar", "Encerrar repetição"]].forEach(([acao, texto]) => {
+            item.appendChild(document.createTextNode(" · "));
+            const botao = document.createElement("button");
+            botao.type = "button";
+            botao.className = "pedido-aviso";
+            botao.textContent = texto;
+            botao.addEventListener("click", () => executar(acao, botao));
+            item.appendChild(botao);
+        });
+
+        item.appendChild(msgErro);
+        lista.appendChild(item);
+    });
+
+    if (avisosRecorrentes.length > 0) {
+        bloco.hidden = false;
+    }
+};
+
+const mesSeguinteTexto = (anoMes) => {
+    const totalMeses = Number(anoMes.slice(0, 4)) * 12 + Number(anoMes.slice(4, 6));
+    return Math.floor(totalMeses / 12) + String(totalMeses % 12 + 1).padStart(2, "0");
+};
+
+const textoParaDataLocal = (data) =>
+    new Date(Number(data.slice(0, 4)), Number(data.slice(4, 6)) - 1, Number(data.slice(6, 8)));
+
+const diasEntreDatasTexto = (dataInicial, dataFinal) =>
+    Math.round((textoParaDataLocal(dataFinal) - textoParaDataLocal(dataInicial)) / 86400000);
+
+const dataDigitadaParaTexto = (texto) => {
+    const partes = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(texto);
+
+    if (!partes) {
+        return null;
+    }
+
+    const data = partes[3] + partes[2] + partes[1];
+    const conferida = textoParaDataLocal(data);
+    const valida = conferida.getFullYear() === Number(partes[3]) &&
+        conferida.getMonth() === Number(partes[2]) - 1 &&
+        conferida.getDate() === Number(partes[1]);
+
+    return valida ? data : null;
+};
+
+const formatarDataDigitada = (data) => data.slice(6, 8) + "/" + data.slice(4, 6) + "/" + data.slice(0, 4);
+
+const calcularEncargosPrevistos = (conta, encargos, dataFinal) => {
+    const arredondar = (valor) => Math.round(valor * 100) / 100;
+    const valorJurosPass = conta.ehPendencia
+        ? arredondar(Math.max(conta.valorAtual - conta.valorOriginal - conta.multaJaCobrada, 0))
+        : 0;
+
+    let valorMulta = 0;
+    if (!conta.ehPendencia && encargos.formaMulta === 0) {
+        valorMulta = arredondar(encargos.taxaMulta);
+    } else if (!conta.ehPendencia && encargos.formaMulta === 1) {
+        valorMulta = arredondar(conta.valorOriginal * encargos.taxaMulta / 100);
+    }
+
+    const dias = encargos.contagemJuros === 1 && conta.dataVencimento
+        ? Math.max(diasEntreDatasTexto(conta.dataVencimento, dataFinal), 0)
+        : 0;
+    const meses = encargos.contagemJuros === 1 ? dias / 30 : 1;
+    const valorBase = encargos.tipoJurosSC === 1 ? conta.valorOriginal + valorJurosPass : conta.valorOriginal;
+
+    let valorJuros = 0;
+    if (encargos.taxaJuros > 0 && encargos.tipoJurosSC === 1) {
+        valorJuros = arredondar(valorBase * (Math.pow(1 + encargos.taxaJuros / 100, meses) - 1));
+    } else if (encargos.taxaJuros > 0) {
+        const jurosPorMes = encargos.tipoJuros === 0 ? encargos.taxaJuros : valorBase * encargos.taxaJuros / 100;
+        valorJuros = arredondar(jurosPorMes * meses);
+    }
+
+    return {
+        valorMulta,
+        valorJuros,
+        dias,
+        valorTotal: arredondar(conta.valorAtual + valorMulta + valorJuros)
+    };
+};
+
+const linhasTextoEncargos = (encargos) => {
+    if (!encargos) {
+        return ["Sem juros"];
+    }
+
+    const formatarNumero = (valor) => valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+    const linhas = [];
+
+    if (encargos.taxaJuros > 0) {
+        const valorJuros = encargos.tipoJuros === 0
+            ? formatarReais(encargos.taxaJuros)
+            : formatarNumero(encargos.taxaJuros) + "%";
+        linhas.push(valorJuros + (encargos.tipoJurosSC === 1 ? " composto" : " simples") +
+            (encargos.contagemJuros === 1 ? " pro rata" : ""));
+    } else {
+        linhas.push("Sem juros");
+    }
+
+    if (encargos.formaMulta === 0) {
+        linhas.push("multa " + formatarReais(encargos.taxaMulta));
+    } else if (encargos.formaMulta === 1) {
+        linhas.push("multa " + formatarNumero(encargos.taxaMulta) + "%");
+    }
+
+    return linhas;
+};
+
+const encargosDaPrevisao = (previsao) => {
+    const formaMulta = previsao.formaMulta === null || previsao.formaMulta === undefined ? null : Number(previsao.formaMulta);
+    const valorMulta = Number(previsao.valorMulta || 0);
+    const valorOriginal = Number(previsao.valorOriginal);
+
+    let taxaMulta = 0;
+    if (formaMulta === 0) {
+        taxaMulta = valorMulta;
+    } else if (formaMulta === 1 && valorOriginal > 0) {
+        taxaMulta = Math.round(valorMulta / valorOriginal * 10000) / 100;
+    }
+
+    return {
+        tipoJuros: Number(previsao.tipoJuros),
+        tipoJurosSC: Number(previsao.tipoJurosSC || 0),
+        taxaJuros: Number(previsao.taxaJuros),
+        contagemJuros: Number(previsao.contagemJuros || 0),
+        formaMulta,
+        taxaMulta,
+        dataPrevPagamento: previsao.dataPrevPagamento || null
+    };
+};
+
+const criarJanelaEncargos = (aoSalvar, aoFechar) => {
+    const overlay = document.getElementById("overlay_juros");
+    const form = document.getElementById("form_juros");
+    const lblGasto = document.getElementById("lbl_gastoJuros");
+    const msgErro = document.getElementById("msg_erroJuros");
+    const checkSimples = document.getElementById("check_jurosSimples");
+    const checkCompostos = document.getElementById("check_jurosCompostos");
+    const checkSemJuros = document.getElementById("check_semJuros");
+    const grupoMulta = document.getElementById("grupo_multa");
+    const lblMultaCobrada = document.getElementById("lbl_multaCobrada");
+    const checkSemMulta = document.getElementById("check_semMulta");
+    const checkMultaReal = document.getElementById("check_multaReal");
+    const checkMultaPorcentagem = document.getElementById("check_multaPorcentagem");
+    const campoValorMulta = document.getElementById("campo_valorMulta");
+    const inputValorMulta = document.getElementById("input_valorMulta");
+    const grupoValorJuros = document.getElementById("grupo_valorJuros");
+    const inputValorJuros = document.getElementById("input_valorJuros");
+    const checkJurosReal = document.getElementById("check_jurosReal");
+    const checkJurosPorcentagem = document.getElementById("check_jurosPorcentagem");
+    const inputDataPagamento = document.getElementById("input_dataPagamento");
+    const lblAjudaDataPagamento = document.getElementById("lbl_ajudaDataPagamento");
+    const campoProRata = document.getElementById("campo_proRata");
+    const checkProRata = document.getElementById("check_proRata");
+    const lblPrevisao = document.getElementById("lbl_previsaoEncargos");
+    let contaAtual = null;
+
+    const temJuros = () => checkSimples.checked || checkCompostos.checked;
+
+    const formaMultaEscolhida = () => {
+        if (contaAtual.ehPendencia) return 2;
+        if (checkMultaReal.checked) return 0;
+        if (checkMultaPorcentagem.checked) return 1;
+        return checkSemMulta.checked ? 2 : null;
+    };
+
+    const lerEncargos = () => {
+        const formaMulta = formaMultaEscolhida();
+
+        return {
+            tipoJurosSC: checkCompostos.checked ? 1 : 0,
+            tipoJuros: temJuros() && (checkCompostos.checked || checkJurosPorcentagem.checked) ? 1 : 0,
+            taxaJuros: temJuros() ? Number(inputValorJuros.value) || 0 : 0,
+            contagemJuros: temJuros() && checkProRata.checked ? 1 : 0,
+            formaMulta,
+            taxaMulta: formaMulta === 0 || formaMulta === 1 ? Number(inputValorMulta.value) || 0 : 0,
+            dataPrevPagamento: inputDataPagamento.value ? dataDigitadaParaTexto(inputDataPagamento.value) : null
+        };
+    };
+
+    const validar = (encargos) => {
+        if (!temJuros() && !checkSemJuros.checked) {
+            return "Escolha o tipo de juros: simples, compostos ou sem juros.";
+        }
+
+        if (encargos.formaMulta === null) {
+            return "Escolha uma opção de multa, mesmo que seja Sem multa.";
+        }
+
+        if ((encargos.formaMulta === 0 || encargos.formaMulta === 1) && !(Number(inputValorMulta.value) > 0)) {
+            return "Informe o valor da multa.";
+        }
+
+        if (temJuros() && !(Number(inputValorJuros.value) > 0)) {
+            return "Informe o valor dos juros por mês.";
+        }
+
+        if (checkSimples.checked && !checkJurosReal.checked && !checkJurosPorcentagem.checked) {
+            return "Escolha se os juros são em R$ ou em porcentagem.";
+        }
+
+        if (inputDataPagamento.value) {
+            const mesDestino = mesSeguinteTexto(contaAtual.dataEntrada.slice(0, 6));
+
+            if (!encargos.dataPrevPagamento) {
+                return "Data de pagamento inválida. Use dd/mm/aaaa.";
+            }
+
+            if (encargos.dataPrevPagamento.slice(0, 6) !== mesDestino) {
+                return "A data de pagamento deve ser em " + mesDestino.slice(4, 6) + "/" + mesDestino.slice(0, 4) + ", o mês seguinte.";
+            }
+
+            if (contaAtual.dataVencimento && encargos.dataPrevPagamento <= contaAtual.dataVencimento) {
+                return "A data de pagamento deve ser depois do vencimento (" + formatarDataCurta(contaAtual.dataVencimento) + ").";
+            }
+        }
+
+        return "";
+    };
+
+    const atualizarPrevisao = () => {
+        const encargos = lerEncargos();
+        const semFormaDosJuros = checkSimples.checked && !checkJurosReal.checked && !checkJurosPorcentagem.checked;
+        const encargosDaPrevia = {
+            ...encargos,
+            taxaJuros: semFormaDosJuros ? 0 : encargos.taxaJuros,
+            contagemJuros: contaAtual.dataVencimento ? encargos.contagemJuros : 0,
+            formaMulta: encargos.formaMulta === null ? 2 : encargos.formaMulta
+        };
+        const previsto = calcularEncargosPrevistos(contaAtual, encargosDaPrevia, encargos.dataPrevPagamento || dataDeHojeTexto());
+
+        let detalheJuros = "";
+        if (encargosDaPrevia.taxaJuros > 0 && encargosDaPrevia.contagemJuros === 1) {
+            detalheJuros = " (" + previsto.dias + (previsto.dias === 1 ? " dia" : " dias") +
+                (encargos.dataPrevPagamento ? "" : " até hoje") + ")";
+        } else if (encargosDaPrevia.taxaJuros > 0) {
+            detalheJuros = " (1 mês)";
+        }
+
+        const linhas = [
+            ["Valor da conta", contaAtual.valorAtual],
+            [contaAtual.ehPendencia ? "Multa (já cobrada)" : "Multa", previsto.valorMulta],
+            ["Juros" + detalheJuros, previsto.valorJuros],
+            ["Total previsto", previsto.valorTotal]
+        ];
+
+        lblPrevisao.innerHTML = "";
+        linhas.forEach(([rotulo, valor], indice) => {
+            const linha = document.createElement("span");
+            linha.className = indice === linhas.length - 1 ? "linha-previa linha-previa-total" : "linha-previa";
+
+            const textoRotulo = document.createElement("span");
+            textoRotulo.textContent = rotulo;
+            const textoValor = document.createElement("span");
+            textoValor.textContent = formatarReais(valor);
+
+            linha.appendChild(textoRotulo);
+            linha.appendChild(textoValor);
+            lblPrevisao.appendChild(linha);
+        });
+    };
+
+    const atualizarJanela = () => {
+        if (checkCompostos.checked) {
+            checkJurosReal.checked = false;
+            checkJurosPorcentagem.checked = true;
+        }
+
+        checkJurosReal.disabled = checkCompostos.checked;
+        checkJurosReal.parentElement.title = checkCompostos.checked ? "Juros compostos são sempre em porcentagem" : "";
+        grupoValorJuros.hidden = !temJuros();
+        campoProRata.hidden = !temJuros() || !contaAtual.dataVencimento;
+        campoValorMulta.hidden = !(checkMultaReal.checked || checkMultaPorcentagem.checked);
+        atualizarPrevisao();
+    };
+
+    const tornarExclusivos = (checks) => {
+        checks.forEach((check) => {
+            check.addEventListener("change", () => {
+                if (check.checked) {
+                    checks
+                        .filter((outro) => outro !== check)
+                        .forEach((outro) => {
+                            outro.checked = false;
+                        });
+                }
+
+                atualizarJanela();
+            });
+        });
+    };
+
+    tornarExclusivos([checkSimples, checkCompostos, checkSemJuros]);
+    tornarExclusivos([checkSemMulta, checkMultaReal, checkMultaPorcentagem]);
+    tornarExclusivos([checkJurosReal, checkJurosPorcentagem]);
+
+    [inputValorJuros, inputValorMulta].forEach((input) => input.addEventListener("input", atualizarPrevisao));
+    checkProRata.addEventListener("change", atualizarPrevisao);
+
+    inputDataPagamento.addEventListener("input", () => {
+        inputDataPagamento.value = aplicarMascaraData(inputDataPagamento.value);
+        atualizarPrevisao();
+    });
+
+    const preencher = (encargos) => {
+        checkSemJuros.checked = !(encargos.taxaJuros > 0);
+        checkSimples.checked = encargos.taxaJuros > 0 && encargos.tipoJurosSC !== 1;
+        checkCompostos.checked = encargos.taxaJuros > 0 && encargos.tipoJurosSC === 1;
+
+        if (encargos.taxaJuros > 0) {
+            inputValorJuros.value = encargos.taxaJuros;
+            checkJurosReal.checked = encargos.tipoJuros === 0;
+            checkJurosPorcentagem.checked = encargos.tipoJuros === 1;
+            checkProRata.checked = encargos.contagemJuros === 1;
+        }
+
+        checkSemMulta.checked = encargos.formaMulta === 2;
+        checkMultaReal.checked = encargos.formaMulta === 0;
+        checkMultaPorcentagem.checked = encargos.formaMulta === 1;
+
+        if (encargos.formaMulta === 0 || encargos.formaMulta === 1) {
+            inputValorMulta.value = encargos.taxaMulta;
+        }
+
+        inputDataPagamento.value = encargos.dataPrevPagamento ? formatarDataDigitada(encargos.dataPrevPagamento) : "";
+    };
+
+    const abrir = ({ conta, descricao, encargos }) => {
+        contaAtual = conta;
+        form.reset();
+        msgErro.textContent = "";
+        lblGasto.textContent = descricao;
+        grupoMulta.hidden = conta.ehPendencia;
+        lblMultaCobrada.hidden = !conta.ehPendencia;
+
+        const mesDestino = mesSeguinteTexto(conta.dataEntrada.slice(0, 6));
+        lblAjudaDataPagamento.textContent = "Dia de " + mesDestino.slice(4, 6) + "/" + mesDestino.slice(0, 4) +
+            " em que você pretende pagar. Se deixar vazio, a conta vence no mesmo dia do mês seguinte.";
+
+        if (encargos) {
+            preencher(encargos);
+        }
+
+        atualizarJanela();
+        overlay.classList.add("active");
+    };
+
+    const fechar = () => {
+        overlay.classList.remove("active");
+
+        if (aoFechar) {
+            aoFechar();
+        }
+    };
+
+    document.getElementById("btn_fecharJuros").addEventListener("click", fechar);
+
+    overlay.addEventListener("click", (evento) => {
+        if (evento.target === overlay) {
+            fechar();
+        }
+    });
+
+    form.addEventListener("submit", async (evento) => {
+        evento.preventDefault();
+        msgErro.textContent = "";
+
+        const encargos = lerEncargos();
+        const erro = validar(encargos);
+
+        if (erro) {
+            msgErro.textContent = erro;
+            return;
+        }
+
+        const erroAoSalvar = await aoSalvar(contaAtual, encargos);
+
+        if (erroAoSalvar) {
+            msgErro.textContent = erroAoSalvar;
+            return;
+        }
+
+        overlay.classList.remove("active");
+    });
+
+    return { abrir };
 };
 
 // RNF-05.1: explicacao curta dos termos financeiros, mostrada ao passar o mouse
@@ -171,9 +674,9 @@ const GLOSSARIO = {
     renda: "Todo o dinheiro que entrou neste mês, como salário, vendas e benefícios.",
     gastos: "Todo o dinheiro que saiu neste mês, como contas, compras e lazer.",
     saldo: "Quanto sobrou no mês: a renda menos os gastos. Se ficar negativo, você gastou mais do que ganhou.",
-    valoresEmAberto: "Os valores do mês atual, que ainda não terminou. Eles mudam até o fim do mês, conforme entram novas rendas, gastos e lançamentos recorrentes.",
+    valoresEmAberto: "Os valores do mês atual, que ainda não terminou. Eles podem mudar até o fim do mês, conforme você lança novas rendas e gastos.",
     tipoLancamento: "Fixo: se repete todo mês, como aluguel ou salário. Variável: acontece uma vez só, como mercado ou uma compra.",
-    fixo: "Se repete todo mês, como aluguel ou salário. O sistema lança sozinho, no mesmo dia de cada mês.",
+    fixo: "Se repete todo mês, como aluguel ou salário. Ao salvar, o sistema cria os lançamentos dos próximos meses, no mesmo dia, até 1 ano à frente.",
     variavel: "Lançado uma vez só, não se repete todo mês. Ex.: mercado, lazer ou uma compra.",
     importancia: "Em qual parte da regra 50-30-20 esse gasto entra. 1 = necessidade (ex.: aluguel). 2 = desejo (ex.: lazer). 3 = reserva (ex.: investimento).",
     rendaAtiva: "Dinheiro que você ganha trabalhando, como o salário do seu emprego principal.",
@@ -182,7 +685,21 @@ const GLOSSARIO = {
     gastosPorCategoria: "Mostra em que você gastou no mês escolhido. Cada fatia é uma categoria: quanto maior a fatia, mais dinheiro foi pra ela.",
     receitaPorCategoria: "Mostra de onde veio o seu dinheiro no mês escolhido. Receita é tudo o que você recebeu.",
     evolucaoRenda: "Mostra quanto você ganhou em cada mês, pra ver se a sua renda está subindo ou caindo.",
-    categoriasGastosMensais: "Compara, mês a mês, as 3 categorias em que você mais gasta. O resto aparece junto em \"Outros\"."
+    categoriasGastosMensais: "Compara, mês a mês, as 3 categorias em que você mais gasta. O resto aparece junto em \"Outros\".",
+    multa: "Valor cobrado uma única vez quando a conta é paga depois do vencimento.",
+    jurosSimples: "Juros calculados sempre sobre o valor original da conta: cada mês de atraso soma o mesmo valor.",
+    jurosCompostos: "Juros calculados sobre o valor já corrigido do mês anterior, ou seja, juros sobre juros.",
+    jurosProRata: "Juros proporcionais aos dias de atraso: a taxa do mês é dividida por 30 e multiplicada pelos dias.",
+    pendencia: "Conta que não foi paga no mês certo e passou para este mês. O valor já inclui a multa e os juros informados. O mês entre parênteses é o mês original da conta.",
+    vencimento: "Último dia para pagar a conta sem atraso. Depois dessa data, a conta fica atrasada e pode ter multa e juros.",
+    atrasada: "O vencimento já passou e a conta ainda não foi paga. Informe a multa e os juros, se houver, ou marque como paga.",
+    regra503020: "Forma de dividir a receita do mês: até 50% para necessidades, até 30% para desejos e pelo menos 20% para a reserva.",
+    necessidade: "Gastos essenciais, como moradia, alimentação e saúde. Pela regra 50-30-20, até 50% da receita.",
+    desejo: "Gastos que não são essenciais, como lazer, viagens e compras pessoais. Pela regra 50-30-20, até 30% da receita.",
+    reserva: "Dinheiro guardado para o futuro ou para emergências, como poupança e investimentos. Pela regra 50-30-20, pelo menos 20% da receita.",
+    limite: "Quanto você pode gastar em cada parte neste mês, calculado sobre a receita. Para a reserva é o contrário: o mínimo que deveria guardar.",
+    beneficios: "Dinheiro recebido sem ser salário, como vale-alimentação, auxílios do governo, aposentadoria ou pensão.",
+    ganhosEventuais: "Dinheiro que entra de vez em quando, sem data certa, como um prêmio, um presente em dinheiro ou a restituição do Imposto de Renda."
 };
 
 // Categorias padrão de receita com nome técnico, pelo número do molde (categoria_padrao).
@@ -190,10 +707,40 @@ const GLOSSARIO = {
 const TERMO_POR_CATEGORIA_PADRAO = {
     12: "rendaAtiva",
     13: "rendaAtivaSecundaria",
-    14: "rendaPassiva"
+    14: "rendaPassiva",
+    16: "ganhosEventuais",
+    17: "beneficios"
 };
 
 const termoDaCategoria = (categoria) => categoria ? TERMO_POR_CATEGORIA_PADRAO[categoria.idTemplate] : undefined;
+
+const criarTextoComTermo = (texto, termo) => {
+    const elemento = document.createElement("span");
+    elemento.className = "termo";
+    elemento.dataset.termo = termo;
+    elemento.tabIndex = 0;
+    elemento.textContent = texto;
+    return elemento;
+};
+
+const MARCA_DE_PENDENCIA = /\s\(pendente de \d{2}\/\d{2}\)$/;
+
+const preencherDescricao = (elemento, nome, ehPendencia) => {
+    const marca = ehPendencia ? nome.match(MARCA_DE_PENDENCIA) : null;
+
+    if (!marca) {
+        elemento.appendChild(document.createTextNode(nome));
+        return;
+    }
+
+    elemento.appendChild(document.createTextNode(nome.slice(0, marca.index) + " "));
+    elemento.appendChild(criarTextoComTermo(marca[0].trim(), "pendencia"));
+};
+
+const marcarSeloAtrasada = (selo) => {
+    selo.dataset.termo = "atrasada";
+    selo.tabIndex = 0;
+};
 
 const dicaTermo = document.createElement("div");
 dicaTermo.id = "dica_termo";
@@ -378,7 +925,7 @@ if (lblContador) {
         if (window.location.pathname.endsWith("cadastro.html")) {
             window.location.href = "landingPage.html";
         } else if (!window.location.pathname.endsWith("landingPage.html")) {
-            window.location.href = "index.html";
+            navegarPara("index.html");
         }
     });
 }
@@ -563,6 +1110,8 @@ if (tabelaLancamentos) {
     const msgErroExcluir = document.getElementById("msg_erroExcluir");
     const btnCancelarExcluir = document.getElementById("btn_cancelarExcluir");
     const btnConfirmarExcluir = document.getElementById("btn_confirmarExcluir");
+    const btnConfirmarExcluirSeguintes = document.getElementById("btn_confirmarExcluirSeguintes");
+    const caixaExcluir = overlayExcluir.querySelector(".modal-box");
     let lancamentoParaExcluir = null;
     const blocoAvisosLancamentos = document.getElementById("avisos_vencimento");
     const inputAnoLancamentos = document.getElementById("input_anoLancamentos");
@@ -573,19 +1122,47 @@ if (tabelaLancamentos) {
     let anoLancamentos = String(new Date().getFullYear());
     inputAnoLancamentos.value = anoLancamentos;
 
-    const overlayJurosAtraso = document.getElementById("overlay_juros");
-    const formJurosAtraso = document.getElementById("form_juros");
-    const msgErroJurosAtraso = document.getElementById("msg_erroJuros");
-    const lblGastoJurosAtraso = document.getElementById("lbl_gastoJuros");
-    const inputValorJurosAtraso = document.getElementById("input_valorJuros");
-    const checkJurosRealAtraso = document.getElementById("check_jurosReal");
-    const checkJurosPorcentagemAtraso = document.getElementById("check_jurosPorcentagem");
-    const checkSemJurosAtraso = document.getElementById("check_semJuros");
-    const checksTipoJurosAtraso = [checkJurosRealAtraso, checkJurosPorcentagemAtraso, checkSemJurosAtraso];
-    let gastoAtrasado = null;
+    const janelaEncargosAtraso = criarJanelaEncargos(async (conta, encargos) => {
+        try {
+            const resposta = await fetchApi("http://localhost:3000/previsoes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idGasto: conta.idValor, ...encargos, pago: 0 })
+            });
+
+            const dados = await resposta.json().catch(() => ({}));
+
+            if (!resposta.ok) {
+                return dados.erro || "Não foi possível salvar a multa e os juros.";
+            }
+
+            carregarLancamentos();
+            return "";
+        } catch (erro) {
+            return "Não foi possível conectar ao servidor.";
+        }
+    });
+
+    const lblAjudaRecorrente = document.getElementById("lbl_ajudaRecorrente");
+
+    const somarMesesTexto = (anoMes, quantidade) => {
+        const totalMeses = Number(anoMes.slice(0, 4)) * 12 + Number(anoMes.slice(4, 6)) - 1 + quantidade;
+        return Math.floor(totalMeses / 12) + String(totalMeses % 12 + 1).padStart(2, "0");
+    };
+
+    const atualizarAjudaRecorrente = () => {
+        const partes = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(inputDataLancamento.value);
+        const anoMesAtual = dataDeHojeTexto().slice(0, 6);
+        const anoMesLancamento = partes ? partes[3] + partes[2] : anoMesAtual;
+        const limite = somarMesesTexto(anoMesLancamento > anoMesAtual ? anoMesLancamento : anoMesAtual, 12);
+
+        lblAjudaRecorrente.textContent = "Os lançamentos dos próximos meses serão criados até " + formatarMesAno(limite) +
+            " (1 ano à frente) ou até a data final, se for antes. Quando chegar o fim, aparece um aviso para renovar.";
+    };
 
     inputDataLancamento.addEventListener("input", () => {
         inputDataLancamento.value = aplicarMascaraData(inputDataLancamento.value);
+        atualizarAjudaRecorrente();
     });
 
     inputVencimentoLancamento.addEventListener("input", () => {
@@ -598,6 +1175,7 @@ if (tabelaLancamentos) {
 
     inputRecorrente.addEventListener("change", () => {
         campoDataFinal.hidden = !inputRecorrente.checked;
+        atualizarAjudaRecorrente();
         if (!inputRecorrente.checked) {
             inputDataFinalLancamento.value = "";
         }
@@ -833,10 +1411,11 @@ if (tabelaLancamentos) {
             return;
         }
 
-        const [resposta, avisos, respostaPrevisoes] = await Promise.all([
+        const [resposta, avisos, respostaPrevisoes, avisosRecorrentes] = await Promise.all([
             fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
             buscarAvisosVencimento(),
-            fetchApi("http://localhost:3000/previsoes/usuario/" + usuarioLogado.idUsuario)
+            fetchApi("http://localhost:3000/previsoes/usuario/" + usuarioLogado.idUsuario),
+            buscarAvisosRecorrentes()
         ]);
         valoresLancamentos = await resposta.json();
 
@@ -846,7 +1425,8 @@ if (tabelaLancamentos) {
             previsaoPorGastoLancamentos[String(previsao.idGasto)] = previsao;
         });
 
-        renderizarAvisosVencimento(blocoAvisosLancamentos, avisos);
+        renderizarAvisosVencimento(blocoAvisosLancamentos, avisos, (aviso) => atenderPedidoDoAvisoLancamentos(aviso));
+        adicionarAvisosRecorrentes(blocoAvisosLancamentos, avisosRecorrentes, carregarLancamentos);
 
         avisoPorGastoLancamentos = {};
         avisos.forEach((aviso) => {
@@ -925,7 +1505,7 @@ if (tabelaLancamentos) {
         const montarLinhaLancamento = (grupo, indiceSelecionado) => {
             const valor = grupo[indiceSelecionado];
             const positivo = valor.receitaDespesa === 1;
-            const valorFormatado = (positivo ? "R$ " : "-R$ ") + Number(valor.valorValor).toFixed(2);
+            const valorFormatado = (positivo ? "" : "-") + formatarReais(valor.valorValor);
             const ehFilha = linhasFilhas.includes(grupo);
             const linha = document.createElement("tr");
 
@@ -977,7 +1557,7 @@ if (tabelaLancamentos) {
                 celulaDescricao.appendChild(setaFilha);
             }
 
-            celulaDescricao.appendChild(document.createTextNode(valor.nomeValor));
+            preencherDescricao(celulaDescricao, valor.nomeValor, Boolean(valor.idPendente));
             linha.appendChild(celulaDescricao);
 
             // Categorias de renda com nome técnico (Ativa, Passiva...) ganham explicação
@@ -1014,16 +1594,19 @@ if (tabelaLancamentos) {
                 const seloVencimento = document.createElement("span");
                 seloVencimento.className = "badge-tipo selo-vencimento " + (aviso.situacao === "vencido" ? "badge-vencido" : "badge-a-vencer");
                 seloVencimento.textContent = textoSeloVencimento(aviso);
+
+                if (aviso.situacao === "vencido") {
+                    marcarSeloAtrasada(seloVencimento);
+                }
+
                 celulaVencimento.appendChild(seloVencimento);
             }
 
             const previsao = previsaoPorGastoLancamentos[String(valor.idValor)];
-            if (previsao && Number(previsao.pago) === 0) {
+            if (previsao && Number(previsao.pago) === 0 && previsao.dataNaoPago) {
                 const seloNaoPago = document.createElement("span");
                 seloNaoPago.className = "badge-tipo selo-vencimento badge-vencido";
-                seloNaoPago.textContent = previsao.dataNaoPago
-                    ? "Não pago em " + formatarDataCurta(previsao.dataNaoPago)
-                    : "Não pago";
+                seloNaoPago.textContent = "Não pago em " + formatarDataCurta(previsao.dataNaoPago);
                 celulaVencimento.appendChild(seloNaoPago);
             }
 
@@ -1056,7 +1639,9 @@ if (tabelaLancamentos) {
         };
 
         linhasOrdenadas.forEach((grupo) => {
-            tabelaLancamentos.appendChild(montarLinhaLancamento(grupo, 0));
+            const hoje = dataDeHojeTexto();
+            const indiceAteHoje = grupo.findIndex((item) => item.dataEntrada <= hoje);
+            tabelaLancamentos.appendChild(montarLinhaLancamento(grupo, indiceAteHoje === -1 ? grupo.length - 1 : indiceAteHoje));
         });
     };
 
@@ -1069,42 +1654,57 @@ if (tabelaLancamentos) {
         lancamentoParaExcluir = valor;
         msgErroExcluir.textContent = "";
         btnConfirmarExcluir.disabled = false;
+        btnConfirmarExcluirSeguintes.disabled = false;
+
+        const fazParteDeSerie = !valor.idPendente && (valor.recorValor === 1 || valor.idOrigem !== null);
 
         lblExcluirLancamento.textContent = "Excluir \"" + valor.nomeValor + "\" de " + formatarDataCurta(valor.dataEntrada) +
-            " (R$ " + Number(valor.valorValor).toFixed(2) + ")? Ele será apagado do banco e não pode ser desfeito.";
+            " (" + formatarReais(valor.valorValor) + ")? Ele será apagado do banco e não pode ser desfeito.";
 
-        let aviso = "";
+        const avisos = [];
 
         if (valor.idPendente) {
-            aviso = "Como é uma pendência, as pendências seguintes dela também serão apagadas e o gasto do mês anterior passa a contar como pago.";
+            avisos.push("Como é uma pendência, as pendências seguintes dela também serão apagadas e o gasto do mês anterior passa a contar como pago.");
         } else if (valores.some((item) => String(item.idPendente) === String(valor.idValor))) {
-            aviso = "As pendências com juros geradas a partir dele também serão apagadas.";
-        } else if (valor.recorValor === 1) {
-            aviso = "Ele deixa de se repetir nos próximos meses. Os lançamentos já gerados continuam.";
+            avisos.push("As pendências com juros geradas a partir dele também serão apagadas.");
         }
 
-        lblAvisoExcluir.textContent = aviso;
-        lblAvisoExcluir.hidden = aviso === "";
+        if (fazParteDeSerie) {
+            avisos.push("Este lançamento se repete todo mês. \"Só este mês\" apaga apenas o de " + formatarDataCurta(valor.dataEntrada) +
+                " e a repetição continua. \"Este e os próximos em aberto\" apaga também os meses seguintes que ainda não foram pagos nem marcados como não pagos, e encerra a repetição.");
+        }
+
+        lblAvisoExcluir.textContent = avisos.join(" ");
+        lblAvisoExcluir.hidden = avisos.length === 0;
+
+        btnConfirmarExcluir.textContent = fazParteDeSerie ? "Só este mês" : "Excluir";
+        btnConfirmarExcluirSeguintes.hidden = !fazParteDeSerie;
+        caixaExcluir.classList.toggle("modal-excluir-serie", fazParteDeSerie);
 
         overlayExcluir.classList.add("active");
         btnCancelarExcluir.focus();
     };
 
-    btnConfirmarExcluir.addEventListener("click", async () => {
+    const confirmarExclusao = async (escopo) => {
         if (!lancamentoParaExcluir) {
             return;
         }
 
         btnConfirmarExcluir.disabled = true;
+        btnConfirmarExcluirSeguintes.disabled = true;
         msgErroExcluir.textContent = "";
 
         try {
-            const resposta = await fetchApi("http://localhost:3000/valores/id/" + lancamentoParaExcluir.idValor, { method: "DELETE" });
+            const resposta = await fetchApi(
+                "http://localhost:3000/valores/id/" + lancamentoParaExcluir.idValor + "?escopo=" + escopo,
+                { method: "DELETE" }
+            );
 
             if (!resposta.ok) {
                 const dados = await resposta.json().catch(() => ({}));
                 msgErroExcluir.textContent = dados.erro || "Não foi possível excluir o lançamento.";
                 btnConfirmarExcluir.disabled = false;
+                btnConfirmarExcluirSeguintes.disabled = false;
                 return;
             }
 
@@ -1113,8 +1713,12 @@ if (tabelaLancamentos) {
         } catch (erro) {
             msgErroExcluir.textContent = "Não foi possível conectar ao servidor.";
             btnConfirmarExcluir.disabled = false;
+            btnConfirmarExcluirSeguintes.disabled = false;
         }
-    });
+    };
+
+    btnConfirmarExcluir.addEventListener("click", () => confirmarExclusao("mes"));
+    btnConfirmarExcluirSeguintes.addEventListener("click", () => confirmarExclusao("seguintes"));
 
     btnCancelarExcluir.addEventListener("click", fecharConfirmacaoExclusao);
     document.getElementById("btn_fecharExcluir").addEventListener("click", fecharConfirmacaoExclusao);
@@ -1159,92 +1763,85 @@ if (tabelaLancamentos) {
         campoVencimento.hidden = valor.receitaDespesa === 1;
 
         definirCamposBloqueados(ligadoAPendencia);
-        msgInfoLancamento.textContent = ligadoAPendencia
-            ? "Este lançamento faz parte de uma pendência com juros: só a descrição pode ser alterada."
-            : "";
-        msgInfoLancamento.hidden = !ligadoAPendencia;
+
+        const informacoes = [];
+
+        if (ligadoAPendencia) {
+            informacoes.push("Este lançamento faz parte de uma pendência com juros: só a descrição pode ser alterada.");
+        }
+
+        if (valor.recorValor === 1) {
+            informacoes.push("Este é o lançamento fixo original: ao mudar a descrição, o valor ou a categoria, os meses futuros que ainda estão em aberto também mudam.");
+        } else if (valor.idOrigem !== null) {
+            informacoes.push("Este lançamento fixo foi gerado automaticamente: a mudança vale só para este mês.");
+        }
+
+        msgInfoLancamento.textContent = informacoes.join(" ");
+        msgInfoLancamento.hidden = informacoes.length === 0;
 
         overlayLancamento.classList.add("active");
         inputDescricaoLancamento.focus();
     };
 
-    const atualizarCampoValorJurosAtraso = () => {
-        inputValorJurosAtraso.disabled = checkSemJurosAtraso.checked;
-        inputValorJurosAtraso.required = !checkSemJurosAtraso.checked;
-
-        if (checkSemJurosAtraso.checked) {
-            inputValorJurosAtraso.value = "";
-        }
-    };
-
     const abrirPopupJurosAtraso = (gasto) => {
-        gastoAtrasado = gasto;
-        formJurosAtraso.reset();
-        msgErroJurosAtraso.textContent = "";
-        lblGastoJurosAtraso.textContent = gasto.nomeValor + " venceu em " + formatarDataCurta(gasto.dataVencimento) +
-            " e já está atrasada. Informe o juros do atraso.";
-        atualizarCampoValorJurosAtraso();
-        overlayJurosAtraso.classList.add("active");
+        janelaEncargosAtraso.abrir({
+            conta: {
+                idValor: gasto.idValor,
+                valorAtual: Number(gasto.valorValor),
+                valorOriginal: Number(gasto.valorValor),
+                ehPendencia: false,
+                multaJaCobrada: 0,
+                dataVencimento: gasto.dataVencimento,
+                dataEntrada: gasto.dataEntrada
+            },
+            descricao: gasto.nomeValor + " - " + formatarReais(gasto.valorValor) + " está atrasada desde " +
+                formatarDataCurta(gasto.dataVencimento) + ". Informe a multa e os juros do atraso.",
+            encargos: null
+        });
     };
 
-    document.getElementById("btn_fecharJuros").addEventListener("click", () => {
-        overlayJurosAtraso.classList.remove("active");
-    });
-
-    overlayJurosAtraso.addEventListener("click", (event) => {
-        if (event.target === overlayJurosAtraso) {
-            overlayJurosAtraso.classList.remove("active");
-        }
-    });
-
-    checksTipoJurosAtraso.forEach((check) => {
-        check.addEventListener("change", () => {
-            if (check.checked) {
-                checksTipoJurosAtraso
-                    .filter((outro) => outro !== check)
-                    .forEach((outro) => {
-                        outro.checked = false;
-                    });
-            }
-
-            atualizarCampoValorJurosAtraso();
-        });
-    });
-
-    formJurosAtraso.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        msgErroJurosAtraso.textContent = "";
-
-        if (!checksTipoJurosAtraso.some((check) => check.checked)) {
-            msgErroJurosAtraso.textContent = "Selecione R$, % ou Sem juros.";
+    const atenderPedidoDoAvisoLancamentos = (aviso) => {
+        if (aviso.pedido === "novaDataPagamento") {
+            abrirPedidoNovaDataLancamentos(aviso);
             return;
         }
 
-        try {
-            const resposta = await fetchApi("http://localhost:3000/previsoes", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    idGasto: gastoAtrasado.idValor,
-                    taxaJuros: checkSemJurosAtraso.checked ? 0 : Number(inputValorJurosAtraso.value),
-                    tipoJuros: checkJurosPorcentagemAtraso.checked ? 1 : 0,
-                    pago: 0
-                })
-            });
+        const gasto = valoresLancamentos.find((item) => String(item.idValor) === String(aviso.idGastoDoPedido));
 
-            const dados = await resposta.json().catch(() => ({}));
-
-            if (!resposta.ok) {
-                msgErroJurosAtraso.textContent = dados.erro || "Não foi possível salvar o juros.";
-                return;
-            }
-
-            overlayJurosAtraso.classList.remove("active");
-            carregarLancamentos();
-        } catch (erro) {
-            msgErroJurosAtraso.textContent = "Não foi possível conectar ao servidor.";
+        if (aviso.pedido === "informarEncargos" && gasto) {
+            abrirPopupJurosAtraso(gasto);
         }
-    });
+    };
+
+    const abrirPedidoNovaDataLancamentos = (aviso) => {
+        const gasto = valoresLancamentos.find((item) => String(item.idValor) === String(aviso.idGastoDoPedido));
+        const previsaoSalva = gasto ? previsaoPorGastoLancamentos[String(gasto.idValor)] : null;
+
+        if (!gasto || !previsaoSalva) {
+            return;
+        }
+
+        const origem = gasto.idPendente
+            ? valoresLancamentos.find((item) => String(item.idValor) === String(gasto.idPendente))
+            : null;
+        const previsaoDaOrigem = origem ? previsaoPorGastoLancamentos[String(origem.idValor)] : null;
+
+        janelaEncargosAtraso.abrir({
+            conta: {
+                idValor: gasto.idValor,
+                valorAtual: Number(gasto.valorValor),
+                valorOriginal: Number(origem ? origem.valorValor : gasto.valorValor),
+                ehPendencia: Boolean(gasto.idPendente),
+                multaJaCobrada: previsaoDaOrigem ? Number(previsaoDaOrigem.valorMulta || 0) : 0,
+                dataVencimento: gasto.dataVencimento,
+                dataEntrada: gasto.dataEntrada
+            },
+            descricao: gasto.nomeValor + " - " + formatarReais(gasto.valorValor) + ": a data de pagamento informada" +
+                (previsaoSalva.dataPrevPagamento ? " (" + formatarDataCurta(previsaoSalva.dataPrevPagamento) + ")" : "") +
+                " já passou. Informe uma nova data de pagamento.",
+            encargos: { ...encargosDaPrevisao(previsaoSalva), dataPrevPagamento: null }
+        });
+    };
 
     const abrirModalLancamento = (tipo) => {
         idLancamentoEditando = null;
@@ -1414,9 +2011,21 @@ if (tabelaLancamentos) {
     const formCategoria = document.getElementById("form_categoria");
     const btnFecharCategoria = document.getElementById("btn_fecharCategoria");
     const msgErroCategoria = document.getElementById("msg_erroCategoria");
+    const inputTipoCategoria = document.getElementById("input_tipoCategoria");
+    const campoImportanciaCategoria = document.getElementById("campo_importanciaCategoria");
+    const inputImportanciaCategoria = document.getElementById("input_importanciaCategoria");
+
+    const atualizarCampoImportancia = () => {
+        const ehReceita = inputTipoCategoria.value === "1";
+        campoImportanciaCategoria.hidden = ehReceita;
+        inputImportanciaCategoria.required = !ehReceita;
+    };
+
+    inputTipoCategoria.addEventListener("change", atualizarCampoImportancia);
 
     document.getElementById("btn_adicionarCategoria").addEventListener("click", () => {
         formCategoria.reset();
+        atualizarCampoImportancia();
         msgErroCategoria.textContent = "";
         overlayCategoria.classList.add("active");
     });
@@ -1436,8 +2045,7 @@ if (tabelaLancamentos) {
         msgErroCategoria.textContent = "";
 
         const nome = document.getElementById("input_nomeCategoria").value.trim();
-        const tipo = document.getElementById("input_tipoCategoria").value;
-        const importancia = document.getElementById("input_importanciaCategoria").value;
+        const tipo = Number(inputTipoCategoria.value);
 
         try {
             const resposta = await fetchApi("http://localhost:3000/categorias", {
@@ -1445,8 +2053,8 @@ if (tabelaLancamentos) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     nomeCategoria: nome,
-                    tipoCategoria: Number(tipo),
-                    importanciaCategoria: Number(importancia)
+                    tipoCategoria: tipo,
+                    importanciaCategoria: tipo === 1 ? null : Number(inputImportanciaCategoria.value)
                 })
             });
 
@@ -1488,9 +2096,9 @@ if (rendaEl) {
 
     const carregarResumoMensal = async () => {
         if (!usuarioLogado) {
-            rendaEl.textContent = "R$ 0,00";
-            gastosEl.textContent = "R$ 0,00";
-            saldoEl.textContent = "R$ 0,00";
+            rendaEl.textContent = formatarReais(0);
+            gastosEl.textContent = formatarReais(0);
+            saldoEl.textContent = formatarReais(0);
             return;
         }
 
@@ -1511,9 +2119,9 @@ if (rendaEl) {
 
         const saldo = renda - gastos;
 
-        rendaEl.textContent = "R$ " + renda.toFixed(2);
-        gastosEl.textContent = "R$ " + gastos.toFixed(2);
-        saldoEl.textContent = (saldo < 0 ? "-R$ " : "R$ ") + Math.abs(saldo).toFixed(2);
+        rendaEl.textContent = formatarReais(renda);
+        gastosEl.textContent = formatarReais(gastos);
+        saldoEl.textContent = (saldo < 0 ? "-" : "") + formatarReais(Math.abs(saldo));
 
         saldoEl.classList.remove("saldo-positivo", "saldo-negativo");
         saldoEl.classList.add(saldo > 0 ? "saldo-positivo" : "saldo-negativo");
@@ -1523,7 +2131,16 @@ if (rendaEl) {
 
     const blocoAvisosPainel = document.getElementById("avisos_vencimento");
     if (blocoAvisosPainel && usuarioLogado) {
-        buscarAvisosVencimento().then((avisos) => renderizarAvisosVencimento(blocoAvisosPainel, avisos));
+        const carregarAvisosPainel = async () => {
+            const [avisos, avisosRecorrentes] = await Promise.all([buscarAvisosVencimento(), buscarAvisosRecorrentes()]);
+            renderizarAvisosVencimento(blocoAvisosPainel, avisos);
+            adicionarAvisosRecorrentes(blocoAvisosPainel, avisosRecorrentes, async () => {
+                await carregarAvisosPainel();
+                carregarResumoMensal();
+            });
+        };
+
+        carregarAvisosPainel();
     }
 }
 
@@ -1602,8 +2219,6 @@ if (graficoPizzaGastos) {
         ].join(" ");
     };
 
-    const formatarMoeda = (valor) => "R$ " + valor.toFixed(2);
-
     const mostrarTooltip = (evento, linhas) => {
         tooltipGrafico.innerHTML = "";
 
@@ -1674,8 +2289,8 @@ if (graficoPizzaGastos) {
             path.tabIndex = 0;
 
             const aoInteragir = (evento) => mostrarTooltip(evento, [
-                formatarMoeda(item.valor),
-                item.nome + " · " + percentual.toFixed(1) + "%"
+                formatarReais(item.valor),
+                item.nome + " · " + formatarPorcentagem(percentual)
             ]);
             path.addEventListener("pointermove", aoInteragir);
             path.addEventListener("pointerenter", aoInteragir);
@@ -1691,7 +2306,7 @@ if (graficoPizzaGastos) {
             marcador.style.background = cor;
 
             const textoLegenda = document.createElement("span");
-            textoLegenda.textContent = item.nome + " (" + percentual.toFixed(1) + "%)";
+            textoLegenda.textContent = item.nome + " (" + formatarPorcentagem(percentual) + ")";
 
             // Categorias de renda com nome técnico (Ativa, Passiva...) ganham explicação
             const categoriaComTermo = categoriasCarregadas.find(
@@ -1712,9 +2327,9 @@ if (graficoPizzaGastos) {
             const celulaNome = document.createElement("td");
             celulaNome.textContent = item.nome;
             const celulaValor = document.createElement("td");
-            celulaValor.textContent = formatarMoeda(item.valor);
+            celulaValor.textContent = formatarReais(item.valor);
             const celulaPercentual = document.createElement("td");
-            celulaPercentual.textContent = percentual.toFixed(1) + "%";
+            celulaPercentual.textContent = formatarPorcentagem(percentual);
 
             linhaTabela.appendChild(celulaNome);
             linhaTabela.appendChild(celulaValor);
@@ -1775,7 +2390,7 @@ if (graficoPizzaGastos) {
             rotuloY.setAttribute("y", String(y + 3));
             rotuloY.setAttribute("text-anchor", "end");
             rotuloY.classList.add("rotulo-eixo");
-            rotuloY.textContent = "R$ " + Math.round(valorGrade);
+            rotuloY.textContent = formatarReaisSemCentavos(valorGrade);
             graficoLinhaRenda.appendChild(rotuloY);
         }
 
@@ -1823,7 +2438,7 @@ if (graficoPizzaGastos) {
             pontoVisivel.style.stroke = COR_SUPERFICIE;
             pontoVisivel.setAttribute("stroke-width", "2");
 
-            const aoInteragir = (evento) => mostrarTooltip(evento, [formatarMoeda(ponto.valor), rotuloMesCompleto]);
+            const aoInteragir = (evento) => mostrarTooltip(evento, [formatarReais(ponto.valor), rotuloMesCompleto]);
             areaClique.addEventListener("pointermove", aoInteragir);
             areaClique.addEventListener("pointerenter", aoInteragir);
             areaClique.addEventListener("focus", aoInteragir);
@@ -1837,7 +2452,7 @@ if (graficoPizzaGastos) {
             const celulaMes = document.createElement("td");
             celulaMes.textContent = rotuloMesCompleto;
             const celulaValor = document.createElement("td");
-            celulaValor.textContent = formatarMoeda(ponto.valor);
+            celulaValor.textContent = formatarReais(ponto.valor);
             linhaTabela.appendChild(celulaMes);
             linhaTabela.appendChild(celulaValor);
             tabelaLinhaRendaCorpo.appendChild(linhaTabela);
@@ -1905,7 +2520,7 @@ if (graficoPizzaGastos) {
             rotuloY.setAttribute("y", String(y + 3));
             rotuloY.setAttribute("text-anchor", "end");
             rotuloY.classList.add("rotulo-eixo");
-            rotuloY.textContent = "R$ " + Math.round(valorGrade);
+            rotuloY.textContent = formatarReaisSemCentavos(valorGrade);
             graficoBarrasCategorias.appendChild(rotuloY);
         }
 
@@ -1958,7 +2573,7 @@ if (graficoPizzaGastos) {
                     barra.tabIndex = 0;
 
                     const aoInteragir = (evento) => mostrarTooltip(evento, [
-                        formatarMoeda(valor),
+                        formatarReais(valor),
                         chave + " · " + rotuloMesCompleto
                     ]);
                     barra.addEventListener("pointermove", aoInteragir);
@@ -1970,7 +2585,7 @@ if (graficoPizzaGastos) {
                     graficoBarrasCategorias.appendChild(barra);
                 }
 
-                valoresLinhaTabela.push(formatarMoeda(valor));
+                valoresLinhaTabela.push(formatarReais(valor));
             });
 
             const linhaTabela = document.createElement("tr");
@@ -2110,7 +2725,8 @@ if (graficoPizzaGastos) {
                 fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
             ]);
 
-            valoresCarregados = await respostaValores.json();
+            const anoMesAtual = dataDeHojeTexto().slice(0, 6);
+            valoresCarregados = (await respostaValores.json()).filter((valor) => valor.dataEntrada.slice(0, 6) <= anoMesAtual);
             categoriasCarregadas = await respostaCategorias.json();
         }
 
@@ -2135,16 +2751,6 @@ if (tabelaGastosMesCalculadora) {
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
 
-    const overlayJuros = document.getElementById("overlay_juros");
-    const formJuros = document.getElementById("form_juros");
-    const msgErroJuros = document.getElementById("msg_erroJuros");
-    const lblGastoJuros = document.getElementById("lbl_gastoJuros");
-    const inputValorJuros = document.getElementById("input_valorJuros");
-    const checkJurosReal = document.getElementById("check_jurosReal");
-    const checkJurosPorcentagem = document.getElementById("check_jurosPorcentagem");
-    const checkSemJuros = document.getElementById("check_semJuros");
-    const checksTipoJuros = [checkJurosReal, checkJurosPorcentagem, checkSemJuros];
-
     const blocoAvisosCalculadora = document.getElementById("avisos_vencimento");
     let avisosPorGasto = {};
 
@@ -2166,10 +2772,10 @@ if (tabelaGastosMesCalculadora) {
     const svgNSCalculadora = "http://www.w3.org/2000/svg";
 
     const PARTES_503020 = [
-        { nome: "Necessidades", importancia: 1, ideal: 50, cor: "var(--serie-1)" },
-        { nome: "Desejos", importancia: 2, ideal: 30, cor: "var(--serie-2)" },
-        { nome: "Reserva", importancia: 3, ideal: 20, cor: "var(--serie-3)" },
-        { nome: "Sem classificação", importancia: null, ideal: null, cor: "#9ca3af" }
+        { nome: "Necessidades", importancia: 1, ideal: 50, cor: "var(--serie-1)", termo: "necessidade" },
+        { nome: "Desejos", importancia: 2, ideal: 30, cor: "var(--serie-2)", termo: "desejo" },
+        { nome: "Reserva", importancia: 3, ideal: 20, cor: "var(--serie-3)", termo: "reserva" },
+        { nome: "Sem classificação", importancia: null, ideal: null, cor: "#9ca3af", termo: null }
     ];
 
     let valoresCalculadora = [];
@@ -2180,8 +2786,19 @@ if (tabelaGastosMesCalculadora) {
     let previsoesSalvas = {};
     let gastoJurosSelecionado = null;
     let popupAbertoPeloNaoPago = false;
+    let estadoAntesDaJanela = null;
+    let pedidoDaJanela = null;
 
-    const ESTADO_PADRAO_GASTO = { naoPago: false, juros: null };
+    const ESTADO_PADRAO_GASTO = { pago: false, naoPago: false, encargos: null };
+    const ENCARGOS_VAZIOS = {
+        tipoJuros: 0,
+        tipoJurosSC: 0,
+        taxaJuros: 0,
+        contagemJuros: 0,
+        formaMulta: null,
+        taxaMulta: 0,
+        dataPrevPagamento: null
+    };
 
     const estadoDoGasto = (idValor) => estadoGastos[String(idValor)] || ESTADO_PADRAO_GASTO;
 
@@ -2191,14 +2808,10 @@ if (tabelaGastosMesCalculadora) {
         JSON.stringify(estadoDoGasto(idValor)) !== JSON.stringify(estadoSalvoDoGasto(idValor));
 
     const estadoDaPrevisao = (previsao) => {
-        const taxa = Number(previsao.taxaJuros);
-        return {
-            naoPago: Number(previsao.pago) === 0,
-            juros: {
-                valor: taxa,
-                tipo: taxa === 0 ? "sem" : (Number(previsao.tipoJuros) === 0 ? "real" : "porcentagem")
-            }
-        };
+        const pago = Number(previsao.pago) === 1;
+        const naoPago = Number(previsao.pago) === 0 && Boolean(previsao.dataNaoPago);
+
+        return { pago, naoPago, encargos: pago || naoPago ? encargosDaPrevisao(previsao) : null };
     };
 
     const registrarPrevisaoSalva = (previsao) => {
@@ -2208,14 +2821,6 @@ if (tabelaGastosMesCalculadora) {
         estadoGastos[id] = estadoDaPrevisao(previsao);
     };
 
-    const textoJurosCadastrado = (juros) => {
-        if (juros.tipo === "sem") {
-            return "Sem juros";
-        }
-
-        return juros.valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + (juros.tipo === "real" ? "R$" : "%");
-    };
-
     const valorBaseDoGasto = (gasto) => {
         const origem = gasto.idPendente
             ? valoresCalculadora.find((item) => String(item.idValor) === String(gasto.idPendente))
@@ -2223,19 +2828,58 @@ if (tabelaGastosMesCalculadora) {
         return Number(origem ? origem.valorValor : gasto.valorValor);
     };
 
-    const calcularValorComJuros = (gasto) => {
-        const valorGasto = Number(gasto.valorValor);
-        const { naoPago, juros } = estadoDoGasto(gasto.idValor);
+    const contaDoGasto = (gasto) => {
+        const previsaoDaOrigem = gasto.idPendente ? previsoesSalvas[String(gasto.idPendente)] : null;
 
-        if (!naoPago || !juros || juros.tipo === "sem") {
-            return valorGasto;
-        }
-
-        const valorJuros = juros.tipo === "real" ? juros.valor : valorBaseDoGasto(gasto) * juros.valor / 100;
-        return Math.round((valorGasto + valorJuros) * 100) / 100;
+        return {
+            idValor: gasto.idValor,
+            valorAtual: Number(gasto.valorValor),
+            valorOriginal: valorBaseDoGasto(gasto),
+            ehPendencia: Boolean(gasto.idPendente),
+            multaJaCobrada: previsaoDaOrigem ? Number(previsaoDaOrigem.valorMulta || 0) : 0,
+            dataVencimento: gasto.dataVencimento,
+            dataEntrada: gasto.dataEntrada
+        };
     };
 
-    const jurosDaPendenciaAnterior = (gasto) => {
+    const encargosCalculadosDoGasto = (gasto) => {
+        const id = String(gasto.idValor);
+        const { pago, naoPago, encargos } = estadoDoGasto(id);
+        const valor = Number(gasto.valorValor);
+
+        if (!(pago || naoPago) || !encargos) {
+            return { valorMulta: 0, valorJuros: 0, valorTotal: valor };
+        }
+
+        const previsao = previsoesSalvas[id];
+
+        if (pago && previsao && Number(previsao.pago) === 1 && !estadoMudou(id)) {
+            return {
+                valorMulta: Number(previsao.valorMulta || 0),
+                valorJuros: Number(previsao.valorJuros || 0),
+                valorTotal: Number(previsao.valorTotal || valor)
+            };
+        }
+
+        const dataFinal = pago ? dataDeHojeTexto() : (encargos.dataPrevPagamento || dataDeHojeTexto());
+        return calcularEncargosPrevistos(contaDoGasto(gasto), encargos, dataFinal);
+    };
+
+    const calcularValorComJuros = (gasto) => encargosCalculadosDoGasto(gasto).valorTotal;
+
+    const situacaoDoGasto = (gasto) => {
+        if (estadoDoGasto(gasto.idValor).pago) {
+            return { texto: "Paga", classe: "badge-paga" };
+        }
+
+        if (gasto.dataVencimento && gasto.dataVencimento < dataDeHojeTexto()) {
+            return { texto: "Atrasada", classe: "badge-vencido" };
+        }
+
+        return { texto: "Em aberto", classe: "badge-variavel" };
+    };
+
+    const encargosDaPendenciaAnterior = (gasto) => {
         if (!gasto.idPendente) {
             return null;
         }
@@ -2249,7 +2893,7 @@ if (tabelaGastosMesCalculadora) {
             )
             .sort((a, b) => b.dataEntrada.localeCompare(a.dataEntrada));
 
-        return anteriores.length > 0 ? estadoSalvo[String(anteriores[0].idValor)].juros : null;
+        return anteriores.length > 0 ? estadoSalvo[String(anteriores[0].idValor)].encargos : null;
     };
 
     const mostrarMensagemSalvar = (mensagem, erro) => {
@@ -2283,7 +2927,7 @@ if (tabelaGastosMesCalculadora) {
         tabelaGastosMesCalculadora.innerHTML = "";
         const linha = document.createElement("tr");
         const celula = document.createElement("td");
-        celula.colSpan = 7;
+        celula.colSpan = 10;
         celula.textContent = mensagem;
         linha.appendChild(celula);
         tabelaGastosMesCalculadora.appendChild(linha);
@@ -2306,9 +2950,10 @@ if (tabelaGastosMesCalculadora) {
         const naoPagoComJurosMes = gastosNaoPagos.reduce((soma, gasto) => soma + calcularValorComJuros(gasto), 0);
         const gastoMes = somarValores(gastosDoMes) - naoPagoMes;
         const estourou = gastoMes > receitaMes;
-        const restamDesejosOuReservas = gastosDoMes.some(
-            (gasto) => [2, 3].includes(importanciaDoGasto(gasto)) && !estadoDoGasto(gasto.idValor).naoPago
-        );
+        const restamDesejosOuReservas = gastosDoMes.some((gasto) => {
+            const estado = estadoDoGasto(gasto.idValor);
+            return [2, 3].includes(importanciaDoGasto(gasto)) && !estado.naoPago && !estado.pago;
+        });
 
         return {
             receitaMes,
@@ -2324,21 +2969,21 @@ if (tabelaGastosMesCalculadora) {
         const { receitaMes, gastoMes, naoPagoMes, naoPagoComJurosMes, estourou, bloquearNecessidades } = resumoDoMesCalculadora(anoMesSelecionado);
         const percentual = receitaMes > 0 ? gastoMes / receitaMes * 100 : (gastoMes > 0 ? 100 : 0);
 
-        lblReceitaMesCalculadora.textContent = "Receita do mês: R$ " + receitaMes.toFixed(2);
-        lblGastoMesCalculadora.textContent = "Gastos do mês: R$ " + gastoMes.toFixed(2) +
-            (receitaMes > 0 ? " (" + percentual.toFixed(0) + "% da receita)" : "");
+        lblReceitaMesCalculadora.textContent = "Receita do mês: " + formatarReais(receitaMes);
+        lblGastoMesCalculadora.textContent = "Gastos do mês: " + formatarReais(gastoMes) +
+            (receitaMes > 0 ? " (" + formatarPorcentagem(percentual, 0) + " da receita)" : "");
 
         lblNaoPagoMesCalculadora.hidden = naoPagoMes === 0;
-        lblNaoPagoMesCalculadora.textContent = "Não pagos (fora da conta): R$ " + naoPagoMes.toFixed(2) +
-            " (vão para o próximo mês como R$ " + naoPagoComJurosMes.toFixed(2) + ")";
+        lblNaoPagoMesCalculadora.textContent = "Não pagos (fora da conta): " + formatarReais(naoPagoMes) +
+            " (vão para o próximo mês como " + formatarReais(naoPagoComJurosMes) + ")";
 
         barraLimitePreenchimento.style.width = Math.min(percentual, 100) + "%";
         barraLimite.classList.toggle("barra-estourada", estourou);
         barraLimite.setAttribute("aria-label",
-            "Gastos de R$ " + gastoMes.toFixed(2) + " para uma receita de R$ " + receitaMes.toFixed(2));
+            "Gastos de " + formatarReais(gastoMes) + " para uma receita de " + formatarReais(receitaMes));
 
         lblAvisoLimite.textContent = estourou
-            ? "⚠ Gastos acima da receita em R$ " + (gastoMes - receitaMes).toFixed(2) +
+            ? "⚠ Gastos acima da receita em " + formatarReais(gastoMes - receitaMes) +
                 (bloquearNecessidades ? ". Marque primeiro como não pagos os desejos e reservas; necessidades só depois." : "")
             : "";
     };
@@ -2448,7 +3093,7 @@ if (tabelaGastosMesCalculadora) {
                 const valorLimite = parte.ideal !== null ? receitaMes * parte.ideal / 100 : null;
                 const textoLimite = valorLimite === null
                     ? "--"
-                    : (ehReserva ? "pelo menos R$ " : "até R$ ") + valorLimite.toFixed(2);
+                    : (ehReserva ? "pelo menos " : "até ") + formatarReais(valorLimite);
                 const foraDoLimite = valorLimite !== null &&
                     (ehReserva ? parte.valor < valorLimite : parte.valor > valorLimite);
 
@@ -2463,8 +3108,8 @@ if (tabelaGastosMesCalculadora) {
                     fatia.tabIndex = 0;
 
                     const linhasTooltip = [
-                        "R$ " + parte.valor.toFixed(2),
-                        parte.nome + " · " + percentualReceita.toFixed(1) + "% da receita (ideal " + textoIdeal + ")",
+                        formatarReais(parte.valor),
+                        parte.nome + " · " + formatarPorcentagem(percentualReceita) + " da receita (ideal " + textoIdeal + ")",
                         valorLimite !== null ? "Limite: " + textoLimite : "",
                         listaCategorias
                     ].filter((linha) => linha !== "");
@@ -2484,18 +3129,22 @@ if (tabelaGastosMesCalculadora) {
                 marcador.className = "marcador-legenda";
                 marcador.style.background = parte.cor;
                 const textoLegenda = document.createElement("span");
-                textoLegenda.textContent = parte.nome + ": " + percentualReceita.toFixed(1) + "%" +
-                    (parte.ideal !== null ? " (ideal " + parte.ideal + "%)" : "");
+                textoLegenda.appendChild(parte.termo ? criarTextoComTermo(parte.nome, parte.termo) : document.createTextNode(parte.nome));
+                textoLegenda.appendChild(document.createTextNode(": " + formatarPorcentagem(percentualReceita) +
+                    (parte.ideal !== null ? " (ideal " + parte.ideal + "%)" : "")));
                 itemLegenda.appendChild(marcador);
                 itemLegenda.appendChild(textoLegenda);
                 legendaPizza503020.appendChild(itemLegenda);
 
                 const linhaTabela = document.createElement("tr");
+                const celulaParte = document.createElement("td");
+                celulaParte.appendChild(parte.termo ? criarTextoComTermo(parte.nome, parte.termo) : document.createTextNode(parte.nome));
+                linhaTabela.appendChild(celulaParte);
+
                 [
-                    parte.nome,
                     listaCategorias || "--",
-                    "R$ " + parte.valor.toFixed(2),
-                    percentualReceita.toFixed(1) + "%",
+                    formatarReais(parte.valor),
+                    formatarPorcentagem(percentualReceita),
                     textoIdeal
                 ].forEach((texto) => {
                     const celula = document.createElement("td");
@@ -2554,119 +3203,151 @@ if (tabelaGastosMesCalculadora) {
         }
     };
 
-    const atualizarCampoValorJuros = () => {
-        inputValorJuros.disabled = checkSemJuros.checked;
-        inputValorJuros.required = !checkSemJuros.checked;
+    const MENSAGENS_DO_PEDIDO = {
+        novaDataPagamento: { erro: "Não foi possível salvar a nova data de pagamento.", sucesso: "Nova data de pagamento salva." },
+        informarEncargos: { erro: "Não foi possível salvar a multa e os juros.", sucesso: "Multa e juros salvos." }
+    };
 
-        if (checkSemJuros.checked) {
-            inputValorJuros.value = "";
+    const salvarPedidoDoAviso = async (conta, encargos) => {
+        const mensagens = MENSAGENS_DO_PEDIDO[pedidoDaJanela];
+
+        try {
+            const resposta = await fetchApi("http://localhost:3000/previsoes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idGasto: conta.idValor, ...encargos, pago: 0 })
+            });
+
+            const dados = await resposta.json().catch(() => ({}));
+
+            if (!resposta.ok) {
+                return dados.erro || mensagens.erro;
+            }
+
+            pedidoDaJanela = null;
+            await carregarGastosMesCalculadora();
+            mostrarMensagemSalvar(mensagens.sucesso, false);
+            return "";
+        } catch (erro) {
+            return "Não foi possível conectar ao servidor.";
         }
     };
 
-    const abrirPopupJuros = (gasto, peloNaoPago) => {
-        formJuros.reset();
-        msgErroJuros.textContent = "";
-        gastoJurosSelecionado = gasto;
-        popupAbertoPeloNaoPago = peloNaoPago;
-        lblGastoJuros.textContent = gasto.nomeValor + " - R$ " + Number(gasto.valorValor).toFixed(2);
-
-        const juros = estadoDoGasto(gasto.idValor).juros || jurosDaPendenciaAnterior(gasto);
-        if (juros) {
-            inputValorJuros.value = juros.tipo === "sem" ? "" : juros.valor;
-            checkJurosReal.checked = juros.tipo === "real";
-            checkJurosPorcentagem.checked = juros.tipo === "porcentagem";
-            checkSemJuros.checked = juros.tipo === "sem";
+    const aoSalvarJanelaEncargos = (conta, encargos) => {
+        if (pedidoDaJanela) {
+            return salvarPedidoDoAviso(conta, encargos);
         }
 
-        atualizarCampoValorJuros();
-        overlayJuros.classList.add("active");
+        estadoGastos[String(conta.idValor)] = { pago: false, naoPago: true, encargos };
+        popupAbertoPeloNaoPago = false;
+        renderizarGastosMesCalculadora();
+        return "";
     };
 
-    const fecharPopupJuros = () => {
-        overlayJuros.classList.remove("active");
+    const aoFecharJanelaEncargos = () => {
+        pedidoDaJanela = null;
 
         if (popupAbertoPeloNaoPago) {
-            const id = String(gastoJurosSelecionado.idValor);
-            estadoGastos[id] = { naoPago: false, juros: estadoSalvoDoGasto(id).juros };
+            estadoGastos[String(gastoJurosSelecionado.idValor)] = estadoAntesDaJanela;
             popupAbertoPeloNaoPago = false;
             renderizarGastosMesCalculadora();
         }
     };
 
-    document.getElementById("btn_fecharJuros").addEventListener("click", fecharPopupJuros);
+    const janelaEncargos = criarJanelaEncargos(aoSalvarJanelaEncargos, aoFecharJanelaEncargos);
 
-    overlayJuros.addEventListener("click", (event) => {
-        if (event.target === overlayJuros) {
-            fecharPopupJuros();
-        }
-    });
+    const abrirPedidoNovaData = (aviso) => {
+        const gasto = gastosCarregados.find((item) => String(item.idValor) === String(aviso.idGastoDoPedido));
+        const previsaoSalva = gasto ? previsoesSalvas[String(gasto.idValor)] : null;
 
-    checksTipoJuros.forEach((check) => {
-        check.addEventListener("change", () => {
-            if (check.checked) {
-                checksTipoJuros
-                    .filter((outro) => outro !== check)
-                    .forEach((outro) => {
-                        outro.checked = false;
-                    });
-            }
-
-            atualizarCampoValorJuros();
-        });
-    });
-
-    formJuros.addEventListener("submit", (event) => {
-        event.preventDefault();
-        msgErroJuros.textContent = "";
-
-        if (!checksTipoJuros.some((check) => check.checked)) {
-            msgErroJuros.textContent = "Selecione R$, % ou Sem juros.";
+        if (!gasto || !previsaoSalva) {
             return;
         }
 
-        estadoGastos[String(gastoJurosSelecionado.idValor)] = {
-            naoPago: true,
-            juros: checkSemJuros.checked
-                ? { valor: 0, tipo: "sem" }
-                : { valor: Number(inputValorJuros.value), tipo: checkJurosReal.checked ? "real" : "porcentagem" }
-        };
+        if (gastosCarregados.some((item) => estadoMudou(item.idValor))) {
+            mostrarMensagemSalvar("Salve as alterações da tabela antes de informar a nova data de pagamento.", true);
+            return;
+        }
 
+        gastoJurosSelecionado = gasto;
         popupAbertoPeloNaoPago = false;
-        overlayJuros.classList.remove("active");
-        renderizarGastosMesCalculadora();
-    });
+        pedidoDaJanela = "novaDataPagamento";
+
+        janelaEncargos.abrir({
+            conta: contaDoGasto(gasto),
+            descricao: gasto.nomeValor + " - " + formatarReais(gasto.valorValor) + ": a data de pagamento informada" +
+                (previsaoSalva.dataPrevPagamento ? " (" + formatarDataCurta(previsaoSalva.dataPrevPagamento) + ")" : "") +
+                " já passou. Informe uma nova data de pagamento.",
+            encargos: { ...encargosDaPrevisao(previsaoSalva), dataPrevPagamento: null }
+        });
+    };
+
+    const abrirPedidoEncargos = (aviso) => {
+        const gasto = gastosCarregados.find((item) => String(item.idValor) === String(aviso.idGastoDoPedido));
+
+        if (!gasto) {
+            return;
+        }
+
+        if (gastosCarregados.some((item) => estadoMudou(item.idValor))) {
+            mostrarMensagemSalvar("Salve as alterações da tabela antes de informar a multa e os juros.", true);
+            return;
+        }
+
+        gastoJurosSelecionado = gasto;
+        popupAbertoPeloNaoPago = false;
+        pedidoDaJanela = "informarEncargos";
+
+        janelaEncargos.abrir({
+            conta: contaDoGasto(gasto),
+            descricao: gasto.nomeValor + " - " + formatarReais(gasto.valorValor) + " está atrasada desde " +
+                formatarDataCurta(gasto.dataVencimento) + ". Informe a multa e os juros do atraso.",
+            encargos: null
+        });
+    };
+
+    const atenderPedidoDoAviso = (aviso) => {
+        if (aviso.pedido === "novaDataPagamento") {
+            abrirPedidoNovaData(aviso);
+        } else if (aviso.pedido === "informarEncargos") {
+            abrirPedidoEncargos(aviso);
+        }
+    };
+
+    const abrirPopupJuros = (gasto, peloNaoPago) => {
+        gastoJurosSelecionado = gasto;
+        popupAbertoPeloNaoPago = peloNaoPago;
+        pedidoDaJanela = null;
+
+        const encargosAnteriores = encargosDaPendenciaAnterior(gasto);
+
+        janelaEncargos.abrir({
+            conta: contaDoGasto(gasto),
+            descricao: gasto.nomeValor + " - " + formatarReais(gasto.valorValor) +
+                (gasto.dataVencimento
+                    ? (gasto.dataVencimento < dataDeHojeTexto() ? " · atrasada desde " : " · vence em ") + formatarDataCurta(gasto.dataVencimento)
+                    : ""),
+            encargos: estadoDoGasto(gasto.idValor).encargos ||
+                (encargosAnteriores ? { ...encargosAnteriores, dataPrevPagamento: null } : null)
+        });
+    };
 
     const montarItensParaSalvar = () => {
-        const hoje = dataDeHojeTexto();
-        const anoMesSelecionado = selectMesAnoCalculadora.value;
         const itens = [];
 
         gastosCarregados.forEach((gasto) => {
             const id = String(gasto.idValor);
-            const { naoPago, juros } = estadoDoGasto(id);
 
-            if (estadoMudou(id)) {
-                if (!naoPago && !previsoesSalvas[id]) {
-                    estadoGastos[id] = ESTADO_PADRAO_GASTO;
-                } else {
-                    const jurosEnviado = juros || { valor: 0, tipo: "sem" };
-                    itens.push({
-                        idGasto: gasto.idValor,
-                        taxaJuros: jurosEnviado.valor,
-                        tipoJuros: jurosEnviado.tipo === "porcentagem" ? 1 : 0,
-                        pago: naoPago ? 0 : 1
-                    });
-                    return;
-                }
+            if (!estadoMudou(id)) {
+                return;
             }
 
-            const confirmarComoPago = !previsoesSalvas[id] &&
-                gasto.dataEntrada.slice(0, 6) === anoMesSelecionado &&
-                anoMesSelecionado <= hoje.slice(0, 6) &&
-                (!gasto.dataVencimento || gasto.dataVencimento <= hoje);
+            const { pago, naoPago, encargos } = estadoDoGasto(id);
 
-            if (confirmarComoPago) {
-                itens.push({ idGasto: gasto.idValor, taxaJuros: 0, tipoJuros: 0, pago: 1 });
+            if (pago || naoPago) {
+                itens.push({ idGasto: gasto.idValor, ...(encargos || ENCARGOS_VAZIOS), pago: pago ? 1 : 0 });
+            } else {
+                itens.push({ idGasto: gasto.idValor, ...ENCARGOS_VAZIOS, pago: null });
             }
         });
 
@@ -2710,20 +3391,90 @@ if (tabelaGastosMesCalculadora) {
     };
 
     const atualizarAvisosCalculadora = async () => {
-        const avisos = await buscarAvisosVencimento();
+        const [avisos, avisosRecorrentes] = await Promise.all([buscarAvisosVencimento(), buscarAvisosRecorrentes()]);
 
         avisosPorGasto = {};
         avisos.forEach((aviso) => {
             avisosPorGasto[String(aviso.idValor)] = aviso;
         });
 
-        renderizarAvisosVencimento(blocoAvisosCalculadora, avisos);
+        renderizarAvisosVencimento(blocoAvisosCalculadora, avisos, (aviso) => atenderPedidoDoAviso(aviso));
+        adicionarAvisosRecorrentes(blocoAvisosCalculadora, avisosRecorrentes, carregarGastosMesCalculadora, () => {
+            if (gastosCarregados.some((item) => estadoMudou(item.idValor))) {
+                mostrarMensagemSalvar("Salve as alterações da tabela antes de renovar ou encerrar um lançamento fixo.", true);
+                return false;
+            }
+
+            return true;
+        });
     };
 
     btnSalvarCalculadora.addEventListener("click", salvarAlteracoesCalculadora);
 
+    const overlaySaida = document.getElementById("overlay_saida");
+    const btnFicarNaPagina = document.getElementById("btn_ficarNaPagina");
+    const btnSalvarESair = document.getElementById("btn_salvarESair");
+    let destinoDaSaida = null;
+    let permitirSaida = false;
+
+    const haAlteracoesNaoSalvas = () => gastosCarregados.some((gasto) => estadoMudou(gasto.idValor));
+
+    const fecharAvisoDeSaida = () => {
+        overlaySaida.classList.remove("active");
+        destinoDaSaida = null;
+    };
+
+    const sairDaPagina = (destino) => {
+        permitirSaida = true;
+        irPara(destino);
+    };
+
+    confirmarSaidaDaPagina = (destino) => {
+        if (!haAlteracoesNaoSalvas()) {
+            sairDaPagina(destino);
+            return;
+        }
+
+        destinoDaSaida = destino;
+        overlaySaida.classList.add("active");
+        btnFicarNaPagina.focus();
+    };
+
+    btnFicarNaPagina.addEventListener("click", fecharAvisoDeSaida);
+    document.getElementById("btn_fecharSaida").addEventListener("click", fecharAvisoDeSaida);
+
+    overlaySaida.addEventListener("click", (event) => {
+        if (event.target === overlaySaida) {
+            fecharAvisoDeSaida();
+        }
+    });
+
+    overlaySaida.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            fecharAvisoDeSaida();
+        }
+    });
+
+    document.getElementById("btn_sairSemSalvar").addEventListener("click", () => {
+        sairDaPagina(destinoDaSaida);
+    });
+
+    btnSalvarESair.addEventListener("click", async () => {
+        const destino = destinoDaSaida;
+        btnSalvarESair.disabled = true;
+        await salvarAlteracoesCalculadora();
+        btnSalvarESair.disabled = false;
+
+        if (haAlteracoesNaoSalvas()) {
+            fecharAvisoDeSaida();
+            return;
+        }
+
+        sairDaPagina(destino);
+    });
+
     window.addEventListener("beforeunload", (event) => {
-        if (gastosCarregados.some((gasto) => estadoMudou(gasto.idValor))) {
+        if (!permitirSaida && haAlteracoesNaoSalvas()) {
             event.preventDefault();
             event.returnValue = "";
         }
@@ -2752,42 +3503,102 @@ if (tabelaGastosMesCalculadora) {
         gastosDoMes.forEach((valor) => {
             const linha = document.createElement("tr");
 
-            [
-                formatarDataExibicaoCalculadora(valor.dataEntrada),
-                valor.nomeValor,
-                nomeCategoriaCalculadora(valor.idCategoria)
-            ].forEach((texto) => {
-                const celula = document.createElement("td");
-                celula.textContent = texto;
-                linha.appendChild(celula);
-            });
+            const celulaData = document.createElement("td");
+            celulaData.textContent = formatarDataExibicaoCalculadora(valor.dataEntrada);
+            linha.appendChild(celulaData);
+
+            const celulaDescricao = document.createElement("td");
+            preencherDescricao(celulaDescricao, valor.nomeValor, Boolean(valor.idPendente));
+            linha.appendChild(celulaDescricao);
+
+            const celulaCategoria = document.createElement("td");
+            celulaCategoria.textContent = nomeCategoriaCalculadora(valor.idCategoria);
+            linha.appendChild(celulaCategoria);
 
             const celulaValor = document.createElement("td");
             celulaValor.className = "valor-negativo";
-            celulaValor.textContent = "-R$ " + Number(valor.valorValor).toFixed(2);
+            celulaValor.textContent = "-" + formatarReais(valor.valorValor);
             linha.appendChild(celulaValor);
 
             const id = String(valor.idValor);
             const estado = estadoDoGasto(id);
+            const calculado = encargosCalculadosDoGasto(valor);
+
+            const celulaSituacao = document.createElement("td");
+            celulaSituacao.className = "celula-situacao";
+            const situacao = situacaoDoGasto(valor);
+            const seloSituacao = document.createElement("span");
+            seloSituacao.className = "badge-tipo " + situacao.classe;
+            seloSituacao.textContent = situacao.texto;
+
+            if (situacao.texto === "Atrasada") {
+                marcarSeloAtrasada(seloSituacao);
+            }
+
+            celulaSituacao.appendChild(seloSituacao);
+
+            const avisoDoGasto = avisosPorGasto[id];
+            if (avisoDoGasto && !estado.pago) {
+                const iconeVencimento = document.createElement("span");
+                iconeVencimento.className = "icone-vencimento " + (avisoDoGasto.situacao === "vencido" ? "icone-vencido" : "icone-a-vencer");
+                iconeVencimento.textContent = "⚠";
+                iconeVencimento.title = textoSeloVencimento(avisoDoGasto) + " (" + formatarDataCurta(avisoDoGasto.dataVencimento) + ")";
+                iconeVencimento.setAttribute("aria-label", iconeVencimento.title);
+                iconeVencimento.setAttribute("role", "img");
+                celulaSituacao.appendChild(iconeVencimento);
+            }
+
+            linha.appendChild(celulaSituacao);
+
+            const celulaMulta = document.createElement("td");
+            if (calculado.valorMulta > 0) {
+                celulaMulta.className = "valor-negativo";
+                celulaMulta.textContent = "-" + formatarReais(calculado.valorMulta);
+            } else {
+                celulaMulta.className = "texto-juros-desativado";
+                celulaMulta.textContent = "--";
+            }
+            linha.appendChild(celulaMulta);
 
             const celulaJuros = document.createElement("td");
+            const textoDosJuros = estado.encargos ? linhasTextoEncargos(estado.encargos)[0] : "Juros";
 
             if (estado.naoPago) {
                 const textoJuros = document.createElement("button");
                 textoJuros.type = "button";
                 textoJuros.className = "texto-juros";
-                textoJuros.textContent = estado.juros ? textoJurosCadastrado(estado.juros) : "Juros";
+                textoJuros.textContent = textoDosJuros;
                 textoJuros.setAttribute("aria-label", "Cadastrar juros de " + valor.nomeValor);
                 textoJuros.addEventListener("click", () => abrirPopupJuros(valor, false));
                 celulaJuros.appendChild(textoJuros);
             } else {
                 const semJuros = document.createElement("span");
                 semJuros.className = "texto-juros-desativado";
-                semJuros.textContent = "--";
+                semJuros.textContent = estado.pago && estado.encargos && estado.encargos.taxaJuros > 0 ? textoDosJuros : "--";
                 celulaJuros.appendChild(semJuros);
             }
 
             linha.appendChild(celulaJuros);
+
+            const celulaValorComJuros = document.createElement("td");
+            celulaValorComJuros.className = "valor-negativo";
+            celulaValorComJuros.textContent = "-" + formatarReais(calculado.valorTotal);
+            linha.appendChild(celulaValorComJuros);
+
+            const celulaPago = document.createElement("td");
+            const checkPago = document.createElement("input");
+            checkPago.type = "checkbox";
+            checkPago.className = "check-pago";
+            checkPago.checked = estado.pago;
+            checkPago.setAttribute("aria-label", "Pago: " + valor.nomeValor);
+            checkPago.addEventListener("change", () => {
+                estadoGastos[id] = checkPago.checked
+                    ? { pago: true, naoPago: false, encargos: estadoDoGasto(id).encargos }
+                    : { ...ESTADO_PADRAO_GASTO };
+                renderizarGastosMesCalculadora();
+            });
+            celulaPago.appendChild(checkPago);
+            linha.appendChild(celulaPago);
 
             const celulaNaoPago = document.createElement("td");
             const checkNaoPago = document.createElement("input");
@@ -2802,34 +3613,18 @@ if (tabelaGastosMesCalculadora) {
             }
             checkNaoPago.addEventListener("change", () => {
                 if (checkNaoPago.checked) {
-                    estadoGastos[id] = { naoPago: true, juros: estadoDoGasto(id).juros };
+                    estadoAntesDaJanela = estadoDoGasto(id);
+                    estadoGastos[id] = { pago: false, naoPago: true, encargos: estadoDoGasto(id).encargos };
                     renderizarGastosMesCalculadora();
                     abrirPopupJuros(valor, true);
                 } else {
-                    estadoGastos[id] = { naoPago: false, juros: estadoSalvoDoGasto(id).juros };
+                    estadoGastos[id] = { ...ESTADO_PADRAO_GASTO };
                     renderizarGastosMesCalculadora();
                 }
             });
 
             celulaNaoPago.appendChild(checkNaoPago);
-
-            const avisoDoGasto = avisosPorGasto[id];
-            if (avisoDoGasto) {
-                const iconeVencimento = document.createElement("span");
-                iconeVencimento.className = "icone-vencimento " + (avisoDoGasto.situacao === "vencido" ? "icone-vencido" : "icone-a-vencer");
-                iconeVencimento.textContent = "⚠";
-                iconeVencimento.title = textoSeloVencimento(avisoDoGasto) + " (" + formatarDataCurta(avisoDoGasto.dataVencimento) + ")";
-                iconeVencimento.setAttribute("aria-label", iconeVencimento.title);
-                iconeVencimento.setAttribute("role", "img");
-                celulaNaoPago.appendChild(iconeVencimento);
-            }
-
             linha.appendChild(celulaNaoPago);
-
-            const celulaValorComJuros = document.createElement("td");
-            celulaValorComJuros.className = "valor-negativo";
-            celulaValorComJuros.textContent = "-R$ " + calcularValorComJuros(valor).toFixed(2);
-            linha.appendChild(celulaValorComJuros);
 
             tabelaGastosMesCalculadora.appendChild(linha);
         });
