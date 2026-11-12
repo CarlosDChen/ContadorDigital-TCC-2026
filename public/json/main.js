@@ -1,3 +1,7 @@
+const URL_DA_API = ["localhost", "127.0.0.1", ""].includes(window.location.hostname) && window.location.port !== "3000"
+    ? "http://localhost:3000"
+    : "";
+
 let confirmarSaidaDaPagina = null;
 
 const irPara = (destino) => {
@@ -149,7 +153,7 @@ const buscarAvisosVencimento = async () => {
     }
 
     try {
-        const resposta = await fetchApi("http://localhost:3000/valores/vencimentos/usuario/" + sessao.idUsuario);
+        const resposta = await fetchApi(URL_DA_API + "/valores/vencimentos/usuario/" + sessao.idUsuario);
         return resposta.ok ? await resposta.json() : [];
     } catch (erro) {
         return [];
@@ -231,7 +235,7 @@ const buscarAvisosRecorrentes = async () => {
     }
 
     try {
-        const resposta = await fetchApi("http://localhost:3000/valores/recorrentes/usuario/" + sessao.idUsuario);
+        const resposta = await fetchApi(URL_DA_API + "/valores/recorrentes/usuario/" + sessao.idUsuario);
         return resposta.ok ? await resposta.json() : [];
     } catch (erro) {
         return [];
@@ -261,7 +265,7 @@ const adicionarAvisosRecorrentes = (bloco, avisosRecorrentes, depoisDeMudar, pod
             msgErro.textContent = "";
 
             try {
-                const resposta = await fetchApi("http://localhost:3000/valores/id/" + aviso.idValor + "/" + acao, { method: "POST" });
+                const resposta = await fetchApi(URL_DA_API + "/valores/id/" + aviso.idValor + "/" + acao, { method: "POST" });
 
                 if (!resposta.ok) {
                     const dados = await resposta.json().catch(() => ({}));
@@ -855,7 +859,7 @@ if (btnLogin && overlayLogin) {
         const senha = document.getElementById("input_senha").value;
 
         try {
-            const resposta = await fetch("http://localhost:3000/login", {
+            const resposta = await fetch(URL_DA_API + "/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, senhaUso: senha })
@@ -883,7 +887,7 @@ if (btnLogin && overlayLogin) {
         msgErro2fa.textContent = "";
 
         try {
-            const resposta = await fetch("http://localhost:3000/login/verificar-codigo", {
+            const resposta = await fetch(URL_DA_API + "/login/verificar-codigo", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -1055,7 +1059,7 @@ if (formCadastro) {
         }
 
         try {
-            const resposta = await fetch("http://localhost:3000/usuarios", {
+            const resposta = await fetch(URL_DA_API + "/usuarios", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -1124,7 +1128,7 @@ if (tabelaLancamentos) {
 
     const janelaEncargosAtraso = criarJanelaEncargos(async (conta, encargos) => {
         try {
-            const resposta = await fetchApi("http://localhost:3000/previsoes", {
+            const resposta = await fetchApi(URL_DA_API + "/previsoes", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ idGasto: conta.idValor, ...encargos, pago: 0 })
@@ -1199,7 +1203,7 @@ if (tabelaLancamentos) {
     const carregarCategorias = async () => {
         if (!usuarioLogado) return;
 
-        const resposta = await fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario);
+        const resposta = await fetchApi(URL_DA_API + "/categorias/usuario/" + usuarioLogado.idUsuario);
         categorias = await resposta.json();
     };
 
@@ -1412,9 +1416,9 @@ if (tabelaLancamentos) {
         }
 
         const [resposta, avisos, respostaPrevisoes, avisosRecorrentes] = await Promise.all([
-            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
+            fetchApi(URL_DA_API + "/valores/usuario/" + usuarioLogado.idUsuario),
             buscarAvisosVencimento(),
-            fetchApi("http://localhost:3000/previsoes/usuario/" + usuarioLogado.idUsuario),
+            fetchApi(URL_DA_API + "/previsoes/usuario/" + usuarioLogado.idUsuario),
             buscarAvisosRecorrentes()
         ]);
         valoresLancamentos = await resposta.json();
@@ -1696,7 +1700,7 @@ if (tabelaLancamentos) {
 
         try {
             const resposta = await fetchApi(
-                "http://localhost:3000/valores/id/" + lancamentoParaExcluir.idValor + "?escopo=" + escopo,
+                URL_DA_API + "/valores/id/" + lancamentoParaExcluir.idValor + "?escopo=" + escopo,
                 { method: "DELETE" }
             );
 
@@ -1925,7 +1929,7 @@ if (tabelaLancamentos) {
 
         if (idLancamentoEditando !== null) {
             try {
-                const respostaEdicao = await fetchApi("http://localhost:3000/valores/id/" + idLancamentoEditando, {
+                const respostaEdicao = await fetchApi(URL_DA_API + "/valores/id/" + idLancamentoEditando, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -1967,7 +1971,7 @@ if (tabelaLancamentos) {
         };
 
         try {
-            let resposta = await fetchApi("http://localhost:3000/valores", {
+            let resposta = await fetchApi(URL_DA_API + "/valores", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(dadosLancamento)
@@ -1982,7 +1986,7 @@ if (tabelaLancamentos) {
                     return;
                 }
 
-                resposta = await fetchApi("http://localhost:3000/valores", {
+                resposta = await fetchApi(URL_DA_API + "/valores", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ ...dadosLancamento, confirmarDuplicado: true })
@@ -2048,7 +2052,7 @@ if (tabelaLancamentos) {
         const tipo = Number(inputTipoCategoria.value);
 
         try {
-            const resposta = await fetchApi("http://localhost:3000/categorias", {
+            const resposta = await fetchApi(URL_DA_API + "/categorias", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -2102,7 +2106,7 @@ if (rendaEl) {
             return;
         }
 
-        const resposta = await fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario);
+        const resposta = await fetchApi(URL_DA_API + "/valores/usuario/" + usuarioLogado.idUsuario);
         const valores = await resposta.json();
 
         const hoje = new Date();
@@ -2721,8 +2725,8 @@ if (graficoPizzaGastos) {
     const carregarGraficos = async () => {
         if (usuarioLogado) {
             const [respostaValores, respostaCategorias] = await Promise.all([
-                fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-                fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario)
+                fetchApi(URL_DA_API + "/valores/usuario/" + usuarioLogado.idUsuario),
+                fetchApi(URL_DA_API + "/categorias/usuario/" + usuarioLogado.idUsuario)
             ]);
 
             const anoMesAtual = dataDeHojeTexto().slice(0, 6);
@@ -3212,7 +3216,7 @@ if (tabelaGastosMesCalculadora) {
         const mensagens = MENSAGENS_DO_PEDIDO[pedidoDaJanela];
 
         try {
-            const resposta = await fetchApi("http://localhost:3000/previsoes", {
+            const resposta = await fetchApi(URL_DA_API + "/previsoes", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ idGasto: conta.idValor, ...encargos, pago: 0 })
@@ -3367,7 +3371,7 @@ if (tabelaGastosMesCalculadora) {
         mostrarMensagemSalvar("Salvando...", false);
 
         try {
-            const resposta = await fetchApi("http://localhost:3000/previsoes/lote", {
+            const resposta = await fetchApi(URL_DA_API + "/previsoes/lote", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ itens })
@@ -3640,9 +3644,9 @@ if (tabelaGastosMesCalculadora) {
         }
 
         const [respostaValores, respostaCategorias, respostaPrevisoes] = await Promise.all([
-            fetchApi("http://localhost:3000/valores/usuario/" + usuarioLogado.idUsuario),
-            fetchApi("http://localhost:3000/categorias/usuario/" + usuarioLogado.idUsuario),
-            fetchApi("http://localhost:3000/previsoes/usuario/" + usuarioLogado.idUsuario)
+            fetchApi(URL_DA_API + "/valores/usuario/" + usuarioLogado.idUsuario),
+            fetchApi(URL_DA_API + "/categorias/usuario/" + usuarioLogado.idUsuario),
+            fetchApi(URL_DA_API + "/previsoes/usuario/" + usuarioLogado.idUsuario)
         ]);
 
         const valores = await respostaValores.json();
